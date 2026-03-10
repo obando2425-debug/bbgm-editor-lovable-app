@@ -220,6 +220,7 @@ const EditorDashboard = () => {
           <TabsContent value="code"><CodeEditor /></TabsContent>
           <TabsContent value="compare"><JsonComparator /></TabsContent>
           <TabsContent value="history"><ChangeHistory /></TabsContent>
+          <TabsContent value="economy"><EconomyEditor /></TabsContent>
         </Tabs>
       </div>
 
