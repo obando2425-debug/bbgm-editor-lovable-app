@@ -115,8 +115,8 @@ const EditorDashboard = () => {
             </Button>
             {/* AI button */}
             <Button variant={aiOpen ? "default" : "outline"} size="sm" onClick={() => setAiOpen(!aiOpen)} className="gap-1 text-xs">
-              <Bot className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">IA</span>
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Aurora</span>
             </Button>
             {/* Add reference file */}
             <label className="cursor-pointer">
