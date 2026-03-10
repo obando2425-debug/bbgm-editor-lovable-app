@@ -19,10 +19,10 @@ const TeamsEditor = () => {
   const players = league?.players || [];
 
   const filtered = useMemo(() => {
-    return teams.map((t, i) => ({ ...t, _idx: i })).filter(t => {
+    return teams.filter((t): t is BBGMTeam => t != null).map((t, i) => ({ ...t, _idx: i })).filter(t => {
       if (!search) return true;
       const q = search.toLowerCase();
-      return t.region.toLowerCase().includes(q) || t.name.toLowerCase().includes(q) || t.abbrev.toLowerCase().includes(q);
+      return (t.region || "").toLowerCase().includes(q) || (t.name || "").toLowerCase().includes(q) || (t.abbrev || "").toLowerCase().includes(q);
     });
   }, [teams, search]);
 
