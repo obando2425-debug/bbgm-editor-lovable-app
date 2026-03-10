@@ -17,6 +17,7 @@ import ContractsEditor from "@/components/ContractsEditor";
 import TradeHistoryEditor from "@/components/TradeHistoryEditor";
 import SeasonHistoryEditor from "@/components/SeasonHistoryEditor";
 import StaffEditor from "@/components/StaffEditor";
+import EconomyEditor from "@/components/EconomyEditor";
 import ChangeHistory from "@/components/ChangeHistory";
 import JsonComparator from "@/components/JsonComparator";
 import AIChatPanel from "@/components/AIChatPanel";
