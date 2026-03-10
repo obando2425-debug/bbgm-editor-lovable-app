@@ -1,0 +1,4 @@
+project_id = "udogvakrsavayasvauso"
+
+[functions.bbgm-ai-chat]
+verify_jwt = false
