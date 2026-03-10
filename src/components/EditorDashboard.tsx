@@ -4,8 +4,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import {
   Download, Upload, Users, Trophy, Settings, FileText, ListOrdered,
-  Bot, Search, History, GitCompare, Award, DollarSign, ArrowLeftRight,
-  Calendar, Briefcase, ExternalLink, FileJson, X, CheckCircle2, AlertCircle
+  Sparkles, Search, History, GitCompare, Award, DollarSign, ArrowLeftRight,
+  Calendar, Briefcase, ExternalLink, FileJson, X, CheckCircle2, AlertCircle, TrendingUp
 } from "lucide-react";
 import PlayersEditor from "@/components/PlayersEditor";
 import TeamsEditor from "@/components/TeamsEditor";
