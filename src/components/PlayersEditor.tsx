@@ -2,10 +2,47 @@ import React, { useState, useMemo, useRef } from "react";
 import { useLeague } from "@/context/LeagueContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Trash2, Copy } from "lucide-react";
+import { Search, Trash2, Copy, GripVertical } from "lucide-react";
 import type { BBGMPlayer } from "@/types/bbgm";
 import { toast } from "sonner";
 import EditSheet from "@/components/EditSheet";
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
+
+const SortableRow = ({ player, idx, teamName, openEdit, duplicatePlayer, deletePlayer }: any) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: idx });
+  const style = {
+    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  const lr = player.ratings?.[player.ratings.length - 1];
+
+  return (
+    <tr ref={setNodeRef} style={style} className="border-t border-border hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => openEdit(idx)}>
+      <td className="p-2 w-8" {...attributes} {...listeners} onClick={e => e.stopPropagation()}>
+        <GripVertical className="w-4 h-4 text-muted-foreground cursor-grab active:cursor-grabbing" />
+      </td>
+      <td className="p-3 font-medium">{player.firstName} {player.lastName}</td>
+      <td className="p-3 text-muted-foreground">{player.pos || "—"}</td>
+      <td className="p-3">
+        <span className="px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium">{teamName(player.tid ?? -1)}</span>
+      </td>
+      <td className="p-3 text-muted-foreground">{player.age ?? "—"}</td>
+      <td className="p-3 font-medium">{lr?.ovr ?? "—"}</td>
+      <td className="p-3 text-primary font-medium">{lr?.pot ?? "—"}</td>
+      <td className="p-3 text-muted-foreground">{player.contract ? `$${((player.contract.amount ?? 0) / 1000).toFixed(1)}M` : "—"}</td>
+      <td className="p-3 flex gap-1" onClick={e => e.stopPropagation()}>
+        <Button variant="ghost" size="icon" onClick={() => duplicatePlayer(idx)} className="h-7 w-7" title="Duplicar">
+          <Copy className="w-3.5 h-3.5" />
+        </Button>
+        <Button variant="ghost" size="icon" onClick={() => deletePlayer(idx)} className="h-7 w-7 text-destructive" title="Eliminar">
+          <Trash2 className="w-3.5 h-3.5" />
+        </Button>
+      </td>
+    </tr>
+  );
+};
 
 const PlayersEditor = () => {
   const { league, updatePlayers } = useLeague();
@@ -19,6 +56,8 @@ const PlayersEditor = () => {
   const players = league?.players || [];
   const teams = league?.teams || [];
 
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
   const filtered = useMemo(() => {
     return players
       .map((p, i) => ({ ...p, _idx: i }))
@@ -30,11 +69,22 @@ const PlayersEditor = () => {
       });
   }, [players, search, teamFilter, posFilter]);
 
+  const sortableIds = useMemo(() => filtered.map(p => p._idx), [filtered]);
+
   const teamName = (tid: number) => {
     if (tid === -1) return "FA";
     if (tid === -2) return "Retired";
     const team = teams.find(t => t.tid === tid);
     return team ? `${team.region} ${team.name}` : `T${tid}`;
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = active.id as number;
+    const newIndex = over.id as number;
+    updatePlayers(arrayMove(players, oldIndex, newIndex));
+    toast.success("Jugador reordenado");
   };
 
   const openEdit = (idx: number) => {
@@ -108,7 +158,6 @@ const PlayersEditor = () => {
   };
 
   const ratingFields = ["ovr", "pot", "hgt", "stre", "spd", "jmp", "endu", "ins", "dnk", "ft", "fg", "tp", "oiq", "diq", "drb", "pss", "reb"];
-
   const lastRating = localPlayer?.ratings?.[localPlayer.ratings.length - 1];
 
   return (
@@ -136,51 +185,38 @@ const PlayersEditor = () => {
 
       <div className="rounded-lg border border-border overflow-hidden">
         <div className="overflow-x-auto scrollbar-thin max-h-[65vh]">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 z-10">
-              <tr className="bg-secondary text-secondary-foreground">
-                <th className="text-left p-3 font-medium">Nombre</th>
-                <th className="text-left p-3 font-medium">Pos</th>
-                <th className="text-left p-3 font-medium">Equipo</th>
-                <th className="text-left p-3 font-medium">Edad</th>
-                <th className="text-left p-3 font-medium">OVR</th>
-                <th className="text-left p-3 font-medium">POT</th>
-                <th className="text-left p-3 font-medium">Contrato</th>
-                <th className="p-3 font-medium w-28"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(player => {
-                const idx = player._idx;
-                const lr = player.ratings?.[player.ratings.length - 1];
-                return (
-                  <tr
-                    key={idx}
-                    className="border-t border-border hover:bg-muted/50 cursor-pointer transition-colors"
-                    onClick={() => openEdit(idx)}
-                  >
-                    <td className="p-3 font-medium">{player.firstName} {player.lastName}</td>
-                    <td className="p-3 text-muted-foreground">{player.pos || "—"}</td>
-                    <td className="p-3">
-                      <span className="px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium">{teamName(player.tid ?? -1)}</span>
-                    </td>
-                    <td className="p-3 text-muted-foreground">{player.age ?? "—"}</td>
-                    <td className="p-3 font-medium">{lr?.ovr ?? "—"}</td>
-                    <td className="p-3 text-primary font-medium">{lr?.pot ?? "—"}</td>
-                    <td className="p-3 text-muted-foreground">{player.contract ? `$${((player.contract.amount ?? 0) / 1000).toFixed(1)}M` : "—"}</td>
-                    <td className="p-3 flex gap-1" onClick={e => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" onClick={() => duplicatePlayer(idx)} className="h-7 w-7" title="Duplicar">
-                        <Copy className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => deletePlayer(idx)} className="h-7 w-7 text-destructive" title="Eliminar">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 z-10">
+                <tr className="bg-secondary text-secondary-foreground">
+                  <th className="p-2 w-8"></th>
+                  <th className="text-left p-3 font-medium">Nombre</th>
+                  <th className="text-left p-3 font-medium">Pos</th>
+                  <th className="text-left p-3 font-medium">Equipo</th>
+                  <th className="text-left p-3 font-medium">Edad</th>
+                  <th className="text-left p-3 font-medium">OVR</th>
+                  <th className="text-left p-3 font-medium">POT</th>
+                  <th className="text-left p-3 font-medium">Contrato</th>
+                  <th className="p-3 font-medium w-28"></th>
+                </tr>
+              </thead>
+              <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+                <tbody>
+                  {filtered.map(player => (
+                    <SortableRow
+                      key={player._idx}
+                      player={player}
+                      idx={player._idx}
+                      teamName={teamName}
+                      openEdit={openEdit}
+                      duplicatePlayer={duplicatePlayer}
+                      deletePlayer={deletePlayer}
+                    />
+                  ))}
+                </tbody>
+              </SortableContext>
+            </table>
+          </DndContext>
         </div>
       </div>
 
@@ -199,7 +235,6 @@ const PlayersEditor = () => {
       >
         {localPlayer && (
           <div className="space-y-6">
-            {/* Basic info */}
             <div>
               <h4 className="text-xs font-display tracking-wider text-primary mb-3 uppercase">Información básica</h4>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -212,33 +247,20 @@ const PlayersEditor = () => {
                 ].map(({ f, l, t }) => (
                   <div key={f}>
                     <label className="text-xs text-muted-foreground mb-1 block">{l}</label>
-                    <Input
-                      type={t || "text"}
-                      value={localPlayer[f] ?? ""}
-                      onChange={e => updateField(f, t === "number" ? parseInt(e.target.value) || 0 : e.target.value)}
-                      className="bg-muted border-border"
-                    />
+                    <Input type={t || "text"} value={localPlayer[f] ?? ""} onChange={e => updateField(f, t === "number" ? parseInt(e.target.value) || 0 : e.target.value)} className="bg-muted border-border" />
                   </div>
                 ))}
-                {/* Team selector dropdown */}
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">Equipo</label>
-                  <select
-                    value={localPlayer.tid ?? -1}
-                    onChange={e => updateField("tid", parseInt(e.target.value))}
-                    className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground"
-                  >
+                  <select value={localPlayer.tid ?? -1} onChange={e => updateField("tid", parseInt(e.target.value))} className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground">
                     <option value={-1}>Free Agent</option>
                     <option value={-2}>Retirado</option>
-                    {teams.map(t => (
-                      <option key={t.tid} value={t.tid}>{t.abbrev} — {t.region} {t.name}</option>
-                    ))}
+                    {teams.map(t => <option key={t.tid} value={t.tid}>{t.abbrev} — {t.region} {t.name}</option>)}
                   </select>
                 </div>
               </div>
             </div>
 
-            {/* Contract */}
             <div>
               <h4 className="text-xs font-display tracking-wider text-primary mb-3 uppercase">Contrato</h4>
               <div className="grid grid-cols-2 gap-3">
@@ -253,7 +275,6 @@ const PlayersEditor = () => {
               </div>
             </div>
 
-            {/* Ratings */}
             {lastRating && (
               <div>
                 <h4 className="text-xs font-display tracking-wider text-primary mb-3 uppercase">Ratings</h4>
@@ -268,7 +289,6 @@ const PlayersEditor = () => {
               </div>
             )}
 
-            {/* Born */}
             <div>
               <h4 className="text-xs font-display tracking-wider text-primary mb-3 uppercase">Nacimiento</h4>
               <div className="grid grid-cols-2 gap-3">
@@ -283,7 +303,6 @@ const PlayersEditor = () => {
               </div>
             </div>
 
-            {/* Raw JSON preview */}
             <div>
               <h4 className="text-xs font-display tracking-wider text-primary mb-3 uppercase">JSON completo</h4>
               <pre className="text-[10px] bg-muted rounded-lg p-3 overflow-auto max-h-48 text-muted-foreground">

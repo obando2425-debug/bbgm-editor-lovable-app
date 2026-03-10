@@ -4,8 +4,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import {
   Download, Upload, Users, Trophy, Settings, FileText, ListOrdered,
-  Bot, Search, History, GitCompare, Award, DollarSign, ArrowLeftRight,
-  Calendar, Briefcase, ExternalLink, FileJson, X, CheckCircle2, AlertCircle
+  Sparkles, Search, History, GitCompare, Award, DollarSign, ArrowLeftRight,
+  Calendar, Briefcase, ExternalLink, FileJson, X, CheckCircle2, AlertCircle, TrendingUp
 } from "lucide-react";
 import PlayersEditor from "@/components/PlayersEditor";
 import TeamsEditor from "@/components/TeamsEditor";
@@ -17,6 +17,7 @@ import ContractsEditor from "@/components/ContractsEditor";
 import TradeHistoryEditor from "@/components/TradeHistoryEditor";
 import SeasonHistoryEditor from "@/components/SeasonHistoryEditor";
 import StaffEditor from "@/components/StaffEditor";
+import EconomyEditor from "@/components/EconomyEditor";
 import ChangeHistory from "@/components/ChangeHistory";
 import JsonComparator from "@/components/JsonComparator";
 import AIChatPanel from "@/components/AIChatPanel";
@@ -114,8 +115,8 @@ const EditorDashboard = () => {
             </Button>
             {/* AI button */}
             <Button variant={aiOpen ? "default" : "outline"} size="sm" onClick={() => setAiOpen(!aiOpen)} className="gap-1 text-xs">
-              <Bot className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">IA</span>
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Aurora</span>
             </Button>
             {/* Add reference file */}
             <label className="cursor-pointer">
@@ -202,6 +203,9 @@ const EditorDashboard = () => {
             <TabsTrigger value="history" className="gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <History className="w-3 h-3" /> Cambios
             </TabsTrigger>
+            <TabsTrigger value="economy" className="gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <TrendingUp className="w-3 h-3" /> Economía
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="players"><PlayersEditor /></TabsContent>
@@ -216,6 +220,7 @@ const EditorDashboard = () => {
           <TabsContent value="code"><CodeEditor /></TabsContent>
           <TabsContent value="compare"><JsonComparator /></TabsContent>
           <TabsContent value="history"><ChangeHistory /></TabsContent>
+          <TabsContent value="economy"><EconomyEditor /></TabsContent>
         </Tabs>
       </div>
 
