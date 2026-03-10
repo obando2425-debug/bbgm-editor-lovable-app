@@ -8,10 +8,21 @@ interface SearchResult {
   path: string;
   value: string;
   context: string;
+  index?: number;
 }
 
+const SECTION_TAB_MAP: Record<string, string> = {
+  players: "players",
+  teams: "teams",
+  draftPicks: "draft",
+  awards: "awards",
+  events: "trades",
+  gameAttributes: "settings",
+  coaches: "staff",
+};
+
 const GlobalSearch = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
-  const { league } = useLeague();
+  const { league, setActiveTab } = useLeague();
   const [query, setQuery] = useState("");
 
   const results = useMemo((): SearchResult[] => {
@@ -20,25 +31,25 @@ const GlobalSearch = ({ open, onClose }: { open: boolean; onClose: () => void })
     const found: SearchResult[] = [];
     const maxResults = 100;
 
-    const search = (obj: any, section: string, path: string) => {
+    const search = (obj: any, section: string, path: string, index?: number) => {
       if (found.length >= maxResults) return;
       if (obj == null) return;
       if (typeof obj === "string" && obj.toLowerCase().includes(q)) {
-        found.push({ section, path, value: obj.slice(0, 100), context: path });
+        found.push({ section, path, value: obj.slice(0, 100), context: path, index });
       } else if (typeof obj === "number" && String(obj).includes(query)) {
-        found.push({ section, path, value: String(obj), context: path });
+        found.push({ section, path, value: String(obj), context: path, index });
       } else if (Array.isArray(obj)) {
         obj.forEach((item, i) => {
           if (found.length >= maxResults) return;
-          search(item, section, `${path}[${i}]`);
+          search(item, section, `${path}[${i}]`, i);
         });
       } else if (typeof obj === "object") {
         Object.entries(obj).forEach(([k, v]) => {
           if (found.length >= maxResults) return;
           if (k.toLowerCase().includes(q)) {
-            found.push({ section, path: `${path}.${k}`, value: String(v).slice(0, 80), context: `key: ${k}` });
+            found.push({ section, path: `${path}.${k}`, value: String(v).slice(0, 80), context: `key: ${k}`, index });
           }
-          search(v, section, `${path}.${k}`);
+          search(v, section, `${path}.${k}`, index);
         });
       }
     };
@@ -48,6 +59,15 @@ const GlobalSearch = ({ open, onClose }: { open: boolean; onClose: () => void })
     });
     return found;
   }, [league, query]);
+
+  const navigateToResult = (result: SearchResult) => {
+    const tab = SECTION_TAB_MAP[result.section];
+    if (tab) {
+      setActiveTab(tab);
+    }
+    onClose();
+    setQuery("");
+  };
 
   if (!open) return null;
 
@@ -80,7 +100,11 @@ const GlobalSearch = ({ open, onClose }: { open: boolean; onClose: () => void })
             <>
               <div className="text-xs text-muted-foreground px-3 py-1">{results.length} resultados</div>
               {results.map((r, i) => (
-                <div key={i} className="px-3 py-2 hover:bg-muted rounded-md cursor-default">
+                <div
+                  key={i}
+                  className="px-3 py-2 hover:bg-muted rounded-md cursor-pointer"
+                  onClick={() => navigateToResult(r)}
+                >
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">{r.section}</span>
                     <span className="text-xs text-muted-foreground font-mono truncate">{r.path}</span>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useRef, type ReactNode } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 import type { BBGMLeague } from "@/types/bbgm";
 
 export interface ChangeRecord {
@@ -6,6 +6,7 @@ export interface ChangeRecord {
   timestamp: number;
   section: string;
   description: string;
+  fieldName?: string;
   before: any;
   after: any;
 }
@@ -28,22 +29,31 @@ interface LeagueContextType {
   updateGameAttributes: (attrs: BBGMLeague["gameAttributes"]) => void;
   updateDraftPicks: (picks: BBGMLeague["draftPicks"]) => void;
   updateSection: (key: string, data: any) => void;
-  // Multi-JSON
   referenceFiles: ReferenceFile[];
   addReferenceFile: (name: string, data: BBGMLeague) => void;
   removeReferenceFile: (id: string) => void;
-  // Change history
   changeHistory: ChangeRecord[];
-  addChange: (section: string, description: string, before: any, after: any) => void;
+  addChange: (section: string, description: string, before: any, after: any, fieldName?: string) => void;
   undo: (changeId: string) => void;
   redo: (changeId: string) => void;
+  undoChanges: Set<string>;
   undoneChanges: Set<string>;
-  // Global search
   globalSearchQuery: string;
   setGlobalSearchQuery: (q: string) => void;
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
+  // Persistence
+  hasSavedSession: boolean;
+  restoreSession: () => void;
+  discardSession: () => void;
+  sessionChecked: boolean;
 }
 
 const LeagueContext = createContext<LeagueContextType | null>(null);
+
+const LEAGUE_STORAGE_KEY = "bbgm-editor-league";
+const FILENAME_STORAGE_KEY = "bbgm-editor-filename";
+const CHANGES_STORAGE_KEY = "bbgm-editor-changes";
 
 export const useLeague = () => {
   const ctx = useContext(LeagueContext);
@@ -53,12 +63,66 @@ export const useLeague = () => {
 
 export const LeagueProvider = ({ children }: { children: ReactNode }) => {
   const [league, setLeagueState] = useState<BBGMLeague | null>(null);
-  const [fileName, setFileName] = useState("");
+  const [fileName, setFileNameState] = useState("");
   const [hasChanges, setHasChanges] = useState(false);
   const [referenceFiles, setReferenceFiles] = useState<ReferenceFile[]>([]);
   const [changeHistory, setChangeHistory] = useState<ChangeRecord[]>([]);
   const [undoneChanges, setUndoneChanges] = useState<Set<string>>(new Set());
   const [globalSearchQuery, setGlobalSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState("players");
+  const [hasSavedSession, setHasSavedSession] = useState(false);
+  const [sessionChecked, setSessionChecked] = useState(false);
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Check for saved session on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(LEAGUE_STORAGE_KEY);
+      setHasSavedSession(!!saved);
+    } catch {}
+    setSessionChecked(true);
+  }, []);
+
+  // Auto-save to localStorage on league changes
+  useEffect(() => {
+    if (!league) return;
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(() => {
+      try {
+        localStorage.setItem(LEAGUE_STORAGE_KEY, JSON.stringify(league));
+        localStorage.setItem(FILENAME_STORAGE_KEY, fileName);
+        localStorage.setItem(CHANGES_STORAGE_KEY, JSON.stringify(changeHistory.slice(0, 200)));
+      } catch (e) {
+        console.warn("Auto-save failed:", e);
+      }
+    }, 1000);
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
+  }, [league, fileName, changeHistory]);
+
+  const restoreSession = useCallback(() => {
+    try {
+      const saved = localStorage.getItem(LEAGUE_STORAGE_KEY);
+      const savedName = localStorage.getItem(FILENAME_STORAGE_KEY) || "restored.json";
+      const savedChanges = localStorage.getItem(CHANGES_STORAGE_KEY);
+      if (saved) {
+        setLeagueState(JSON.parse(saved));
+        setFileNameState(savedName);
+        if (savedChanges) {
+          try { setChangeHistory(JSON.parse(savedChanges)); } catch {}
+        }
+      }
+      setHasSavedSession(false);
+    } catch {}
+  }, []);
+
+  const discardSession = useCallback(() => {
+    try {
+      localStorage.removeItem(LEAGUE_STORAGE_KEY);
+      localStorage.removeItem(FILENAME_STORAGE_KEY);
+      localStorage.removeItem(CHANGES_STORAGE_KEY);
+    } catch {}
+    setHasSavedSession(false);
+  }, []);
 
   const setLeague = useCallback((l: BBGMLeague | null) => {
     setLeagueState(l);
@@ -66,15 +130,25 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
     if (!l) {
       setChangeHistory([]);
       setUndoneChanges(new Set());
+      try {
+        localStorage.removeItem(LEAGUE_STORAGE_KEY);
+        localStorage.removeItem(FILENAME_STORAGE_KEY);
+        localStorage.removeItem(CHANGES_STORAGE_KEY);
+      } catch {}
     }
   }, []);
 
-  const addChange = useCallback((section: string, description: string, before: any, after: any) => {
+  const setFileName = useCallback((name: string) => {
+    setFileNameState(name);
+  }, []);
+
+  const addChange = useCallback((section: string, description: string, before: any, after: any, fieldName?: string) => {
     const record: ChangeRecord = {
       id: crypto.randomUUID(),
       timestamp: Date.now(),
       section,
       description,
+      fieldName,
       before,
       after,
     };
@@ -166,8 +240,10 @@ export const LeagueProvider = ({ children }: { children: ReactNode }) => {
       hasChanges, setHasChanges,
       updatePlayers, updateTeams, updateGameAttributes, updateDraftPicks, updateSection,
       referenceFiles, addReferenceFile, removeReferenceFile,
-      changeHistory, addChange, undo, redo, undoneChanges,
+      changeHistory, addChange, undo, redo, undoneChanges, undoChanges: undoneChanges,
       globalSearchQuery, setGlobalSearchQuery,
+      activeTab, setActiveTab,
+      hasSavedSession, restoreSession, discardSession, sessionChecked,
     }}>
       {children}
     </LeagueContext.Provider>
