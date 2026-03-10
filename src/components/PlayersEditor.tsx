@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { useLeague } from "@/context/LeagueContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Save, Trash2 } from "lucide-react";
+import { Search, Save, Trash2, Copy } from "lucide-react";
 import type { BBGMPlayer } from "@/types/bbgm";
 import { toast } from "sonner";
 
@@ -10,25 +10,27 @@ const PlayersEditor = () => {
   const { league, updatePlayers } = useLeague();
   const [search, setSearch] = useState("");
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [teamFilter, setTeamFilter] = useState("");
+  const [posFilter, setPosFilter] = useState("");
 
   const players = league?.players || [];
+  const teams = league?.teams || [];
 
   const filtered = useMemo(() => {
-    if (!search) return players.map((p, i) => ({ ...p, _idx: i }));
-    const q = search.toLowerCase();
     return players
       .map((p, i) => ({ ...p, _idx: i }))
-      .filter(p =>
-        `${p.firstName} ${p.lastName}`.toLowerCase().includes(q) ||
-        (p.pos || "").toLowerCase().includes(q) ||
-        String(p.tid).includes(q)
-      );
-  }, [players, search]);
+      .filter(p => {
+        const matchSearch = !search || `${p.firstName} ${p.lastName}`.toLowerCase().includes(search.toLowerCase()) || (p.college || "").toLowerCase().includes(search.toLowerCase());
+        const matchTeam = !teamFilter || String(p.tid) === teamFilter;
+        const matchPos = !posFilter || (p.pos || "").toLowerCase() === posFilter.toLowerCase();
+        return matchSearch && matchTeam && matchPos;
+      });
+  }, [players, search, teamFilter, posFilter]);
 
   const teamName = (tid: number) => {
     if (tid === -1) return "FA";
     if (tid === -2) return "Retired";
-    const team = league?.teams?.find(t => t.tid === tid);
+    const team = teams.find(t => t.tid === tid);
     return team ? team.abbrev : `T${tid}`;
   };
 
@@ -51,22 +53,24 @@ const PlayersEditor = () => {
   };
 
   const deletePlayer = (idx: number) => {
-    const updated = players.filter((_, i) => i !== idx);
-    updatePlayers(updated);
+    updatePlayers(players.filter((_, i) => i !== idx));
     setEditingIdx(null);
     toast.success("Jugador eliminado");
   };
 
+  const duplicatePlayer = (idx: number) => {
+    const updated = [...players];
+    const clone = JSON.parse(JSON.stringify(players[idx]));
+    clone.firstName = clone.firstName + " (copia)";
+    updated.splice(idx + 1, 0, clone);
+    updatePlayers(updated);
+    toast.success("Jugador duplicado");
+  };
+
   const addPlayer = () => {
     const newPlayer: BBGMPlayer = {
-      firstName: "Nuevo",
-      lastName: "Jugador",
-      pos: "PG",
-      tid: -1,
-      age: 22,
-      hgt: 75,
-      weight: 190,
-      born: { year: 2004, loc: "" },
+      firstName: "Nuevo", lastName: "Jugador", pos: "PG", tid: -1, age: 22,
+      hgt: 75, weight: 190, born: { year: 2004, loc: "" },
       ratings: [{ ovr: 50, pot: 60, hgt: 50, stre: 50, spd: 50, jmp: 50, endu: 50, ins: 50, dnk: 50, ft: 50, fg: 50, tp: 50, oiq: 50, diq: 50, drb: 50, pss: 50, reb: 50 }],
       contract: { amount: 1000, exp: 2025 },
     };
@@ -75,23 +79,36 @@ const PlayersEditor = () => {
     toast.success("Jugador añadido");
   };
 
+  const exportPlayers = () => {
+    const blob = new Blob([JSON.stringify(filtered.map(({ _idx, ...p }) => p), null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "players.json"; a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Jugadores exportados");
+  };
+
   const ratingFields = ["ovr", "pot", "hgt", "stre", "spd", "jmp", "endu", "ins", "dnk", "ft", "fg", "tp", "oiq", "diq", "drb", "pss", "reb"];
 
   return (
     <div className="animate-fade-in">
-      <div className="flex flex-col sm:flex-row gap-3 mb-4">
-        <div className="relative flex-1">
+      <div className="flex flex-wrap gap-3 mb-4">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar jugador..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="pl-10 bg-card border-border"
-          />
+          <Input placeholder="Buscar jugador..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10 bg-card border-border" />
         </div>
-        <Button onClick={addPlayer} className="gap-2">
-          + Añadir Jugador
-        </Button>
+        <select value={teamFilter} onChange={e => setTeamFilter(e.target.value)} className="bg-card border border-border rounded-md px-3 py-2 text-sm text-foreground">
+          <option value="">Todos los equipos</option>
+          <option value="-1">Free Agents</option>
+          <option value="-2">Retirados</option>
+          {teams.map(t => <option key={t.tid} value={t.tid}>{t.abbrev}</option>)}
+        </select>
+        <select value={posFilter} onChange={e => setPosFilter(e.target.value)} className="bg-card border border-border rounded-md px-3 py-2 text-sm text-foreground">
+          <option value="">Todas las pos</option>
+          {["PG", "SG", "SF", "PF", "C"].map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <Button onClick={addPlayer} className="gap-2">+ Añadir</Button>
+        <Button onClick={exportPlayers} variant="outline" size="sm" className="gap-1 text-xs">Exportar</Button>
       </div>
 
       <div className="text-sm text-muted-foreground mb-2">{filtered.length} jugadores</div>
@@ -108,7 +125,7 @@ const PlayersEditor = () => {
                 <th className="text-left p-3 font-medium">OVR</th>
                 <th className="text-left p-3 font-medium">POT</th>
                 <th className="text-left p-3 font-medium">Contrato</th>
-                <th className="p-3 font-medium w-20"></th>
+                <th className="p-3 font-medium w-28"></th>
               </tr>
             </thead>
             <tbody>
@@ -122,29 +139,21 @@ const PlayersEditor = () => {
                       className={`border-t border-border hover:bg-muted/50 cursor-pointer transition-colors ${isEditing ? "bg-muted/70" : ""}`}
                       onClick={() => setEditingIdx(isEditing ? null : idx)}
                     >
-                      <td className="p-3 font-medium">
-                        {player.firstName} {player.lastName}
-                      </td>
+                      <td className="p-3 font-medium">{player.firstName} {player.lastName}</td>
                       <td className="p-3 text-muted-foreground">{player.pos || "—"}</td>
                       <td className="p-3">
-                        <span className="px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium">
-                          {teamName(player.tid ?? -1)}
-                        </span>
+                        <span className="px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium">{teamName(player.tid ?? -1)}</span>
                       </td>
                       <td className="p-3 text-muted-foreground">{player.age ?? "—"}</td>
                       <td className="p-3 font-medium">{lastRating?.ovr ?? "—"}</td>
                       <td className="p-3 text-primary font-medium">{lastRating?.pot ?? "—"}</td>
-                      <td className="p-3 text-muted-foreground">
-                        {player.contract ? `$${((player.contract.amount ?? 0) / 1000).toFixed(1)}M` : "—"}
-                      </td>
-                      <td className="p-3">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => { e.stopPropagation(); deletePlayer(idx); }}
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="w-4 h-4" />
+                      <td className="p-3 text-muted-foreground">{player.contract ? `$${((player.contract.amount ?? 0) / 1000).toFixed(1)}M` : "—"}</td>
+                      <td className="p-3 flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); duplicatePlayer(idx); }} className="h-7 w-7" title="Duplicar">
+                          <Copy className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); deletePlayer(idx); }} className="h-7 w-7 text-destructive" title="Eliminar">
+                          <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </td>
                     </tr>
@@ -152,38 +161,18 @@ const PlayersEditor = () => {
                       <tr className="bg-card">
                         <td colSpan={8} className="p-4">
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                            <div>
-                              <label className="text-xs text-muted-foreground mb-1 block">Nombre</label>
-                              <Input value={player.firstName} onChange={e => updatePlayer(idx, "firstName", e.target.value)} className="bg-muted border-border" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-muted-foreground mb-1 block">Apellido</label>
-                              <Input value={player.lastName} onChange={e => updatePlayer(idx, "lastName", e.target.value)} className="bg-muted border-border" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-muted-foreground mb-1 block">Posición</label>
-                              <Input value={player.pos || ""} onChange={e => updatePlayer(idx, "pos", e.target.value)} className="bg-muted border-border" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-muted-foreground mb-1 block">Team ID</label>
-                              <Input type="number" value={player.tid ?? -1} onChange={e => updatePlayer(idx, "tid", parseInt(e.target.value))} className="bg-muted border-border" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-muted-foreground mb-1 block">Edad</label>
-                              <Input type="number" value={player.age ?? ""} onChange={e => updatePlayer(idx, "age", parseInt(e.target.value))} className="bg-muted border-border" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-muted-foreground mb-1 block">Altura (in)</label>
-                              <Input type="number" value={player.hgt ?? ""} onChange={e => updatePlayer(idx, "hgt", parseInt(e.target.value))} className="bg-muted border-border" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-muted-foreground mb-1 block">Peso (lbs)</label>
-                              <Input type="number" value={player.weight ?? ""} onChange={e => updatePlayer(idx, "weight", parseInt(e.target.value))} className="bg-muted border-border" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-muted-foreground mb-1 block">Jersey #</label>
-                              <Input value={player.jerseyNumber ?? ""} onChange={e => updatePlayer(idx, "jerseyNumber", e.target.value)} className="bg-muted border-border" />
-                            </div>
+                            {[
+                              { f: "firstName", l: "Nombre" }, { f: "lastName", l: "Apellido" },
+                              { f: "pos", l: "Posición" }, { f: "tid", l: "Team ID", t: "number" },
+                              { f: "age", l: "Edad", t: "number" }, { f: "hgt", l: "Altura (in)", t: "number" },
+                              { f: "weight", l: "Peso (lbs)", t: "number" }, { f: "jerseyNumber", l: "Jersey #" },
+                              { f: "college", l: "College" }, { f: "imgURL", l: "Img URL" },
+                            ].map(({ f, l, t }) => (
+                              <div key={f}>
+                                <label className="text-xs text-muted-foreground mb-1 block">{l}</label>
+                                <Input type={t || "text"} value={(player as any)[f] ?? ""} onChange={e => updatePlayer(idx, f, t === "number" ? parseInt(e.target.value) : e.target.value)} className="bg-muted border-border" />
+                              </div>
+                            ))}
                             <div>
                               <label className="text-xs text-muted-foreground mb-1 block">Contrato ($K)</label>
                               <Input type="number" value={player.contract?.amount ?? ""} onChange={e => updatePlayer(idx, "contract", { ...player.contract, amount: parseInt(e.target.value) })} className="bg-muted border-border" />
@@ -191,14 +180,6 @@ const PlayersEditor = () => {
                             <div>
                               <label className="text-xs text-muted-foreground mb-1 block">Contrato Exp</label>
                               <Input type="number" value={player.contract?.exp ?? ""} onChange={e => updatePlayer(idx, "contract", { ...player.contract, exp: parseInt(e.target.value) })} className="bg-muted border-border" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-muted-foreground mb-1 block">College</label>
-                              <Input value={player.college ?? ""} onChange={e => updatePlayer(idx, "college", e.target.value)} className="bg-muted border-border" />
-                            </div>
-                            <div>
-                              <label className="text-xs text-muted-foreground mb-1 block">Img URL</label>
-                              <Input value={player.imgURL ?? ""} onChange={e => updatePlayer(idx, "imgURL", e.target.value)} className="bg-muted border-border" />
                             </div>
                           </div>
                           {lastRating && (
@@ -208,13 +189,7 @@ const PlayersEditor = () => {
                                 {ratingFields.map(rf => (
                                   <div key={rf}>
                                     <label className="text-[10px] text-muted-foreground uppercase block mb-0.5">{rf}</label>
-                                    <Input
-                                      type="number"
-                                      min={0} max={100}
-                                      value={lastRating[rf] ?? 0}
-                                      onChange={e => updateRating(idx, rf, parseInt(e.target.value) || 0)}
-                                      className="bg-muted border-border h-8 text-xs"
-                                    />
+                                    <Input type="number" min={0} max={100} value={lastRating[rf] ?? 0} onChange={e => updateRating(idx, rf, parseInt(e.target.value) || 0)} className="bg-muted border-border h-8 text-xs" />
                                   </div>
                                 ))}
                               </div>
