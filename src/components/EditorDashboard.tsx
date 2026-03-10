@@ -22,14 +22,14 @@ import ChangeHistory from "@/components/ChangeHistory";
 import JsonComparator from "@/components/JsonComparator";
 import AIChatPanel from "@/components/AIChatPanel";
 import GlobalSearch from "@/components/GlobalSearch";
+import SectionInfo from "@/components/SectionInfo";
 import { toast } from "sonner";
 
 const EditorDashboard = () => {
-  const { league, fileName, hasChanges, setLeague, setFileName, referenceFiles, addReferenceFile, removeReferenceFile, changeHistory } = useLeague();
+  const { league, fileName, hasChanges, setLeague, setFileName, referenceFiles, addReferenceFile, removeReferenceFile, changeHistory, activeTab, setActiveTab } = useLeague();
   const [aiOpen, setAiOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
-  // Keyboard shortcut for search
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
@@ -69,16 +69,6 @@ const EditorDashboard = () => {
     e.target.value = "";
   };
 
-  const exportSection = (key: string, data: any) => {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `${key}.json`; a.click();
-    URL.revokeObjectURL(url);
-    toast.success(`${key} exportado`);
-  };
-
-  // JSON validator
   const isValid = (() => {
     try { JSON.stringify(league); return true; } catch { return false; }
   })();
@@ -91,7 +81,6 @@ const EditorDashboard = () => {
 
   return (
     <div className="animate-fade-in">
-      {/* Header */}
       <header className="border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-30">
         <div className="container mx-auto px-4 py-2 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -100,25 +89,21 @@ const EditorDashboard = () => {
             {hasChanges && (
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-warning text-warning-foreground font-medium">Sin guardar</span>
             )}
-            {/* Validator indicator */}
             <span className={`text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 ${isValid ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}`}>
               {isValid ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
               {isValid ? "Válido" : "Error"}
             </span>
           </div>
           <div className="flex items-center gap-1.5">
-            {/* Global search */}
             <Button variant="ghost" size="sm" onClick={() => setSearchOpen(true)} className="gap-1 text-xs" title="Ctrl+K">
               <Search className="w-3.5 h-3.5" />
               <span className="hidden md:inline">Buscar</span>
               <kbd className="hidden md:inline text-[9px] px-1 py-0.5 rounded bg-muted ml-1">⌘K</kbd>
             </Button>
-            {/* AI button */}
             <Button variant={aiOpen ? "default" : "outline"} size="sm" onClick={() => setAiOpen(!aiOpen)} className="gap-1 text-xs">
               <Sparkles className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Aurora</span>
             </Button>
-            {/* Add reference file */}
             <label className="cursor-pointer">
               <input type="file" accept=".json" multiple onChange={handleAddReference} className="sr-only" />
               <Button variant="ghost" size="sm" asChild className="gap-1 text-xs">
@@ -140,7 +125,6 @@ const EditorDashboard = () => {
         </div>
       </header>
 
-      {/* Reference files bar */}
       {referenceFiles.length > 0 && (
         <div className="container mx-auto px-4 py-1.5 flex items-center gap-2 text-xs border-b border-border bg-muted/30">
           <span className="text-muted-foreground">Refs:</span>
@@ -153,7 +137,6 @@ const EditorDashboard = () => {
         </div>
       )}
 
-      {/* Stats bar */}
       <div className="container mx-auto px-4 py-2">
         <div className="flex gap-4 text-xs text-muted-foreground">
           <span><Users className="w-3.5 h-3.5 inline mr-1" />{stats.players} jugadores</span>
@@ -163,9 +146,8 @@ const EditorDashboard = () => {
         </div>
       </div>
 
-      {/* Editor Tabs */}
       <div className="container mx-auto px-4 pb-8">
-        <Tabs defaultValue="players">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="bg-secondary mb-4 flex-wrap h-auto gap-0.5 p-1">
             <TabsTrigger value="players" className="gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <Users className="w-3 h-3" /> Jugadores
@@ -194,6 +176,9 @@ const EditorDashboard = () => {
             <TabsTrigger value="settings" className="gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <Settings className="w-3 h-3" /> Config
             </TabsTrigger>
+            <TabsTrigger value="finances" className="gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <TrendingUp className="w-3 h-3" /> Finanzas
+            </TabsTrigger>
             <TabsTrigger value="code" className="gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <FileText className="w-3 h-3" /> Code
             </TabsTrigger>
@@ -203,31 +188,25 @@ const EditorDashboard = () => {
             <TabsTrigger value="history" className="gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <History className="w-3 h-3" /> Cambios
             </TabsTrigger>
-            <TabsTrigger value="economy" className="gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <TrendingUp className="w-3 h-3" /> Economía
-            </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="players"><PlayersEditor /></TabsContent>
-          <TabsContent value="teams"><TeamsEditor /></TabsContent>
-          <TabsContent value="draft"><DraftEditor /></TabsContent>
-          <TabsContent value="contracts"><ContractsEditor /></TabsContent>
-          <TabsContent value="awards"><AwardsEditor /></TabsContent>
-          <TabsContent value="staff"><StaffEditor /></TabsContent>
-          <TabsContent value="trades"><TradeHistoryEditor /></TabsContent>
-          <TabsContent value="seasons"><SeasonHistoryEditor /></TabsContent>
-          <TabsContent value="settings"><GameAttributesEditor /></TabsContent>
+          <TabsContent value="players"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Jugadores</h3><SectionInfo section="players" /></div><PlayersEditor /></TabsContent>
+          <TabsContent value="teams"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Equipos</h3><SectionInfo section="teams" /></div><TeamsEditor /></TabsContent>
+          <TabsContent value="draft"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Draft</h3><SectionInfo section="draft" /></div><DraftEditor /></TabsContent>
+          <TabsContent value="contracts"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Contratos</h3><SectionInfo section="contracts" /></div><ContractsEditor /></TabsContent>
+          <TabsContent value="awards"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Premios</h3><SectionInfo section="awards" /></div><AwardsEditor /></TabsContent>
+          <TabsContent value="staff"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Staff</h3><SectionInfo section="staff" /></div><StaffEditor /></TabsContent>
+          <TabsContent value="trades"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Trades</h3><SectionInfo section="trades" /></div><TradeHistoryEditor /></TabsContent>
+          <TabsContent value="seasons"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Historial</h3><SectionInfo section="seasons" /></div><SeasonHistoryEditor /></TabsContent>
+          <TabsContent value="settings"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Configuración</h3><SectionInfo section="settings" /></div><GameAttributesEditor /></TabsContent>
+          <TabsContent value="finances"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Finanzas de Liga</h3><SectionInfo section="finances" /></div><EconomyEditor /></TabsContent>
           <TabsContent value="code"><CodeEditor /></TabsContent>
-          <TabsContent value="compare"><JsonComparator /></TabsContent>
-          <TabsContent value="history"><ChangeHistory /></TabsContent>
-          <TabsContent value="economy"><EconomyEditor /></TabsContent>
+          <TabsContent value="compare"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Comparar</h3><SectionInfo section="compare" /></div><JsonComparator /></TabsContent>
+          <TabsContent value="history"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Cambios</h3><SectionInfo section="history" /></div><ChangeHistory /></TabsContent>
         </Tabs>
       </div>
 
-      {/* AI Chat Panel */}
       <AIChatPanel open={aiOpen} onClose={() => setAiOpen(false)} />
-
-      {/* Global Search */}
       <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   );
