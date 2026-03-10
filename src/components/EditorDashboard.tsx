@@ -203,6 +203,9 @@ const EditorDashboard = () => {
             <TabsTrigger value="history" className="gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <History className="w-3 h-3" /> Cambios
             </TabsTrigger>
+            <TabsTrigger value="economy" className="gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <TrendingUp className="w-3 h-3" /> Economía
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="players"><PlayersEditor /></TabsContent>
