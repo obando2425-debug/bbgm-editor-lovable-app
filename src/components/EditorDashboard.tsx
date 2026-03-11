@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   Download, Upload, Users, Trophy, Settings, FileText, ListOrdered,
   Sparkles, Search, History, GitCompare, Award, DollarSign, ArrowLeftRight,
-  Calendar, Briefcase, ExternalLink, FileJson, X, CheckCircle2, AlertCircle, TrendingUp
+  Calendar, ExternalLink, FileJson, X, CheckCircle2, AlertCircle, TrendingUp
 } from "lucide-react";
 import PlayersEditor from "@/components/PlayersEditor";
 import TeamsEditor from "@/components/TeamsEditor";
@@ -16,7 +16,6 @@ import AwardsEditor from "@/components/AwardsEditor";
 import ContractsEditor from "@/components/ContractsEditor";
 import TradeHistoryEditor from "@/components/TradeHistoryEditor";
 import SeasonHistoryEditor from "@/components/SeasonHistoryEditor";
-import StaffEditor from "@/components/StaffEditor";
 import EconomyEditor from "@/components/EconomyEditor";
 import ChangeHistory from "@/components/ChangeHistory";
 import JsonComparator from "@/components/JsonComparator";
@@ -118,7 +117,7 @@ const EditorDashboard = () => {
             </Button>
             <a href="https://play.basketball-gm.com" target="_blank" rel="noopener noreferrer">
               <Button variant="ghost" size="sm" className="gap-1 text-xs">
-                🏀<span className="hidden lg:inline">BBGM</span><ExternalLink className="w-3 h-3" />
+                <span className="hidden lg:inline">BBGM</span><ExternalLink className="w-3 h-3" />
               </Button>
             </a>
           </div>
@@ -164,9 +163,6 @@ const EditorDashboard = () => {
             <TabsTrigger value="awards" className="gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <Award className="w-3 h-3" /> Premios
             </TabsTrigger>
-            <TabsTrigger value="staff" className="gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-              <Briefcase className="w-3 h-3" /> Staff
-            </TabsTrigger>
             <TabsTrigger value="trades" className="gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <ArrowLeftRight className="w-3 h-3" /> Trades
             </TabsTrigger>
@@ -195,11 +191,10 @@ const EditorDashboard = () => {
           <TabsContent value="draft"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Draft</h3><SectionInfo section="draft" /></div><DraftEditor /></TabsContent>
           <TabsContent value="contracts"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Contratos</h3><SectionInfo section="contracts" /></div><ContractsEditor /></TabsContent>
           <TabsContent value="awards"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Premios</h3><SectionInfo section="awards" /></div><AwardsEditor /></TabsContent>
-          <TabsContent value="staff"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Staff</h3><SectionInfo section="staff" /></div><StaffEditor /></TabsContent>
           <TabsContent value="trades"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Trades</h3><SectionInfo section="trades" /></div><TradeHistoryEditor /></TabsContent>
           <TabsContent value="seasons"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Historial</h3><SectionInfo section="seasons" /></div><SeasonHistoryEditor /></TabsContent>
           <TabsContent value="settings"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Configuración</h3><SectionInfo section="settings" /></div><GameAttributesEditor /></TabsContent>
-          <TabsContent value="finances"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Finanzas de Liga</h3><SectionInfo section="finances" /></div><EconomyEditor /></TabsContent>
+          <TabsContent value="finances"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Finanzas</h3><SectionInfo section="finances" /></div><EconomyEditor /></TabsContent>
           <TabsContent value="code"><CodeEditor /></TabsContent>
           <TabsContent value="compare"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Comparar</h3><SectionInfo section="compare" /></div><JsonComparator /></TabsContent>
           <TabsContent value="history"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Cambios</h3><SectionInfo section="history" /></div><ChangeHistory /></TabsContent>

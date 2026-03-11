@@ -8,47 +8,43 @@ const SECTION_HELP: Record<string, { title: string; content: string }> = {
   },
   teams: {
     title: "Equipos",
-    content: "Administra los equipos de la liga. Cada equipo tiene región, nombre, abreviatura, conferencia, división y colores. Puedes ver el roster completo de cada equipo, añadir jugadores o editar la información del equipo. Los cambios se reflejan automáticamente en las demás secciones."
+    content: "Administra los equipos de la liga. Cada equipo tiene región, nombre, abreviatura, conferencia, división y colores. Puedes ver el roster completo de cada equipo, añadir jugadores o editar la información del equipo."
   },
   draft: {
     title: "Draft",
-    content: "Gestiona los picks del draft. Cada pick tiene temporada, ronda, equipo asignado y equipo original (para picks tradeados). Puedes añadir, eliminar o modificar picks. Los picks se usan en la simulación de Basketball GM para asignar nuevos jugadores."
+    content: "Gestiona los picks del draft. Cada pick tiene temporada, ronda, equipo asignado y equipo original (para picks tradeados). Puedes añadir, eliminar o modificar picks."
   },
   contracts: {
     title: "Contratos",
-    content: "Visualiza y edita los contratos de todos los jugadores activos. Muestra salario (en $K), año de expiración, equipo y ratings. Filtra por equipo para ver la masa salarial total. Haz clic en cualquier fila para editar el contrato completo."
+    content: "Visualiza y edita los contratos de todos los jugadores. Muestra salario, año de expiración, equipo y ratings. Usa 'Sincronizar' para generar contratos para jugadores que no tengan uno."
   },
   awards: {
     title: "Premios",
-    content: "Gestiona los premios y reconocimientos de la liga por temporada: MVP, DPOY, ROY, Finals MVP, All-Star selections y más. Puedes crear, duplicar, editar o eliminar premios. Filtra por temporada para ver los premios de un año específico."
-  },
-  staff: {
-    title: "Staff Técnico",
-    content: "Administra el cuerpo técnico de cada equipo. Basketball GM soporta coaches con atributos como estrategia ofensiva/defensiva. Si tu JSON no incluye staff, puedes crear uno desde cero. Los coaches afectan el rendimiento de los equipos en la simulación."
+    content: "Gestiona los premios de la liga por temporada: MVP, DPOY, ROY, Finals MVP, All-Star y más. Puedes crear, duplicar, editar o eliminar premios."
   },
   trades: {
     title: "Trades",
-    content: "Visualiza el historial de trades registrados en los eventos de la liga y crea nuevos intercambios entre equipos. Selecciona dos equipos, elige los jugadores a intercambiar y ejecuta el trade. Los cambios se aplican automáticamente a los rosters."
+    content: "Visualiza el historial de trades y crea nuevos intercambios entre equipos. Selecciona dos equipos, elige los jugadores y ejecuta el trade."
   },
   seasons: {
     title: "Historial de Temporadas",
-    content: "Explora el historial completo de la liga por temporada. Muestra eventos, premios, campeones y datos destacados de cada año. Haz clic en una temporada para ver todos los detalles y exportar la información como JSON."
+    content: "Explora el historial completo de la liga por temporada. Muestra eventos, premios, campeones y datos destacados de cada año."
   },
   settings: {
     title: "Configuración",
-    content: "Edita todos los atributos de la liga: nombre, temporada, salary cap, luxury tax, número de partidos, reglas de playoffs y más. Los valores simples se editan directamente; los objetos complejos se editan como JSON. Estos valores controlan las reglas de simulación en Basketball GM."
+    content: "Edita todos los atributos de la liga organizados por categorías: Liga, Juego, Equipos, Jugadores, Finanzas y Otros. Incluye reglas de playoffs, retos, tasas y configuración avanzada de Basketball GM."
   },
   finances: {
-    title: "Finanzas de Liga",
-    content: "Gestiona la economía de la liga: salary cap, payroll mínimo, luxury tax e ingresos. Visualiza la masa salarial de cada equipo con indicadores de estado (sobre el cap, en luxury tax). Edita los parámetros financieros que afectan los contratos y la competitividad."
+    title: "Finanzas",
+    content: "Gestiona la economía completa de la liga. 'Finanzas de Liga' muestra los límites salariales y una tabla comparativa de todos los equipos. 'Finanzas por Equipo' permite editar presupuestos (Scouting, Coaching, Salud, Instalaciones), nómina detallada y estrategia."
   },
   compare: {
     title: "Comparar JSONs",
-    content: "Compara el JSON principal con archivos de referencia cargados. Útil para identificar diferencias entre versiones de una liga, verificar cambios realizados o fusionar datos de distintas fuentes."
+    content: "Compara el JSON principal con archivos de referencia cargados. Útil para identificar diferencias entre versiones de una liga."
   },
   history: {
     title: "Historial de Cambios",
-    content: "Registro completo de todas las modificaciones realizadas en la sesión. Cada entrada muestra la sección, descripción, hora y valores anteriores/nuevos. Puedes deshacer cambios individuales, filtrar por categoría o exportar el historial completo como JSON."
+    content: "Registro de todas las modificaciones realizadas. Cada entrada se expande para mostrar valores anteriores y nuevos. Puedes deshacer cambios individuales, filtrar por categoría o exportar el historial."
   },
 };
 

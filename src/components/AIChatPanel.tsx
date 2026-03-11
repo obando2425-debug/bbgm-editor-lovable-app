@@ -77,6 +77,10 @@ const AIChatPanel = ({ open, onClose }: { open: boolean; onClose: () => void }) 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fullTextRef = useRef("");
   const [appliedActions, setAppliedActions] = useState<string[]>([]);
+  
+  // Ref to always have the latest league state for batch operations
+  const leagueRef = useRef(league);
+  useEffect(() => { leagueRef.current = league; }, [league]);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -105,94 +109,125 @@ const AIChatPanel = ({ open, onClose }: { open: boolean; onClose: () => void }) 
     saveSessions(updated);
   }, [currentSessionId, sessions, fileName]);
 
-  const applyAction = useCallback((type: string, data: any) => {
-    const players = league?.players || [];
-    const teams = league?.teams || [];
-    try {
-      switch (type) {
-        case "create_player": {
-          updatePlayers([...players, data]);
-          return `Jugador ${data.firstName} ${data.lastName} creado (Total: ${players.length + 1})`;
-        }
-        case "update_players": {
-          const updates = Array.isArray(data) ? data : [data];
-          let count = 0;
-          const newPlayers = [...players];
-          for (const u of updates) {
-            const idx = newPlayers.findIndex(p =>
-              (p.firstName || "").toLowerCase() === (u.match?.firstName || "").toLowerCase() &&
-              (p.lastName || "").toLowerCase() === (u.match?.lastName || "").toLowerCase()
-            );
-            if (idx !== -1) { newPlayers[idx] = { ...newPlayers[idx], ...u.updates }; count++; }
-          }
-          if (count > 0) updatePlayers(newPlayers);
-          return `${count} jugador(es) actualizado(s)`;
-        }
-        case "delete_player": {
-          const before = players.length;
-          const filtered = players.filter(p =>
-            !((p.firstName || "").toLowerCase() === (data.firstName || "").toLowerCase() &&
-              (p.lastName || "").toLowerCase() === (data.lastName || "").toLowerCase())
-          );
-          if (filtered.length < before) updatePlayers(filtered);
-          return `Jugador ${data.firstName} ${data.lastName} eliminado (Total: ${filtered.length})`;
-        }
-        case "create_team": {
-          updateTeams([...teams, { ...data, tid: data.tid ?? teams.length }]);
-          return `Equipo ${data.region} ${data.name} creado (Total: ${teams.length + 1})`;
-        }
-        case "update_team": {
-          const newTeams = teams.map(t => t.tid === data.tid ? { ...t, ...data } : t);
-          updateTeams(newTeams);
-          return `Equipo tid=${data.tid} actualizado`;
-        }
-        case "update_game_attributes": {
-          const ga = league?.gameAttributes;
-          if (Array.isArray(ga)) {
-            const updated = [...(ga as any[])];
-            for (const [k, v] of Object.entries(data)) {
-              const idx = updated.findIndex((a: any) => a.key === k);
-              if (idx !== -1) updated[idx] = { ...updated[idx], value: v };
-              else updated.push({ key: k, value: v });
-            }
-            updateGameAttributes(updated as any);
-          } else {
-            updateGameAttributes({ ...ga, ...data } as any);
-          }
-          return `Configuración actualizada`;
-        }
-        case "batch_create_players": {
-          const arr = Array.isArray(data) ? data : data.players || [];
-          updatePlayers([...players, ...arr]);
-          return `${arr.length} jugadores creados (Total: ${players.length + arr.length})`;
-        }
-        default:
-          return `Acción desconocida: ${type}`;
-      }
-    } catch (e: any) {
-      return `Error: ${e.message}`;
-    }
-  }, [league, updatePlayers, updateTeams, updateGameAttributes]);
-
-  const parseAndApplyActions = useCallback((text: string) => {
+  // Parse all actions and apply them with accumulation to fix batch bug
+  const parseAndApplyAllActions = useCallback((text: string) => {
     const results: string[] = [];
+    const actions: { type: string; data: any }[] = [];
     let match;
     const regex = new RegExp(ACTION_REGEX.source, "g");
     while ((match = regex.exec(text)) !== null) {
       try {
-        const type = match[1];
-        const data = JSON.parse(match[2].trim());
-        const result = applyAction(type, data);
-        results.push(`✓ ${result}`);
+        actions.push({ type: match[1], data: JSON.parse(match[2].trim()) });
       } catch (e: any) {
         results.push(`✗ Error parsing action: ${e.message}`);
       }
     }
-    if (results.length > 0) {
-      setAppliedActions(results);
-      toast.success(`${results.length} acción(es) aplicada(s) al JSON`);
+    if (actions.length === 0) return;
+
+    // Accumulate changes on the latest league state
+    const currentLeague = leagueRef.current;
+    if (!currentLeague) return;
+
+    let accPlayers = [...(currentLeague.players || [])];
+    let accTeams = [...(currentLeague.teams || [])];
+    let playersChanged = false;
+    let teamsChanged = false;
+    let gaChanged = false;
+    let ga = currentLeague.gameAttributes;
+
+    for (const { type, data } of actions) {
+      try {
+        switch (type) {
+          case "create_player": {
+            accPlayers.push(data);
+            playersChanged = true;
+            results.push(`✓ Jugador ${data.firstName} ${data.lastName} creado`);
+            break;
+          }
+          case "batch_create_players": {
+            const arr = Array.isArray(data) ? data : data.players || [];
+            accPlayers.push(...arr);
+            playersChanged = true;
+            results.push(`✓ ${arr.length} jugadores creados (Total: ${accPlayers.length})`);
+            break;
+          }
+          case "update_players": {
+            const updates = Array.isArray(data) ? data : [data];
+            let count = 0;
+            for (const u of updates) {
+              const idx = accPlayers.findIndex(p =>
+                (p.firstName || "").toLowerCase() === (u.match?.firstName || "").toLowerCase() &&
+                (p.lastName || "").toLowerCase() === (u.match?.lastName || "").toLowerCase()
+              );
+              if (idx !== -1) { accPlayers[idx] = { ...accPlayers[idx], ...u.updates }; count++; }
+            }
+            if (count > 0) playersChanged = true;
+            results.push(`✓ ${count} jugador(es) actualizado(s)`);
+            break;
+          }
+          case "delete_player": {
+            const before = accPlayers.length;
+            accPlayers = accPlayers.filter(p =>
+              !((p.firstName || "").toLowerCase() === (data.firstName || "").toLowerCase() &&
+                (p.lastName || "").toLowerCase() === (data.lastName || "").toLowerCase())
+            );
+            if (accPlayers.length < before) playersChanged = true;
+            results.push(`✓ Jugador ${data.firstName} ${data.lastName} eliminado`);
+            break;
+          }
+          case "create_team": {
+            accTeams.push({ ...data, tid: data.tid ?? accTeams.length });
+            teamsChanged = true;
+            results.push(`✓ Equipo ${data.region} ${data.name} creado (Total: ${accTeams.length})`);
+            break;
+          }
+          case "batch_create_teams": {
+            const arr = Array.isArray(data) ? data : data.teams || [];
+            for (const t of arr) {
+              accTeams.push({ ...t, tid: t.tid ?? accTeams.length });
+            }
+            teamsChanged = true;
+            results.push(`✓ ${arr.length} equipos creados (Total: ${accTeams.length})`);
+            break;
+          }
+          case "update_team": {
+            accTeams = accTeams.map(t => t.tid === data.tid ? { ...t, ...data } : t);
+            teamsChanged = true;
+            results.push(`✓ Equipo tid=${data.tid} actualizado`);
+            break;
+          }
+          case "update_game_attributes": {
+            if (Array.isArray(ga)) {
+              const updated = [...(ga as any[])];
+              for (const [k, v] of Object.entries(data)) {
+                const idx = updated.findIndex((a: any) => a.key === k);
+                if (idx !== -1) updated[idx] = { ...updated[idx], value: v };
+                else updated.push({ key: k, value: v });
+              }
+              ga = updated as any;
+            } else {
+              ga = { ...ga, ...data } as any;
+            }
+            gaChanged = true;
+            results.push(`✓ Configuración actualizada`);
+            break;
+          }
+          default:
+            results.push(`✗ Acción desconocida: ${type}`);
+        }
+      } catch (e: any) {
+        results.push(`✗ Error: ${e.message}`);
+      }
     }
-  }, [applyAction]);
+
+    // Apply all accumulated changes at once
+    if (playersChanged) updatePlayers(accPlayers);
+    if (teamsChanged) updateTeams(accTeams);
+    if (gaChanged) updateGameAttributes(ga as any);
+
+    setAppliedActions(results);
+    toast.success(`${results.filter(r => r.startsWith("✓")).length} acción(es) aplicada(s) al JSON`);
+  }, [updatePlayers, updateTeams, updateGameAttributes]);
 
   // Progress detection from streamed text
   const detectProgress = useCallback((text: string) => {
@@ -305,10 +340,12 @@ const AIChatPanel = ({ open, onClose }: { open: boolean; onClose: () => void }) 
         }
       }
 
-      parseAndApplyActions(fullTextRef.current);
+      // Apply all actions at once with accumulation
+      parseAndApplyAllActions(fullTextRef.current);
       setProgressInfo(null);
 
       const finalMessages = [...newMessages, { role: "assistant" as const, content: cleanActionBlocks(fullTextRef.current) }];
+      setMessages(finalMessages);
       saveCurrentSession(finalMessages);
 
     } catch (e: any) {
@@ -407,7 +444,6 @@ const AIChatPanel = ({ open, onClose }: { open: boolean; onClose: () => void }) 
               <MessageSquarePlus className="w-3.5 h-3.5" /> Nuevo chat
             </Button>
           </div>
-          {/* Sidebar tabs */}
           <div className="flex border-b border-border">
             {SIDEBAR_TABS.map(tab => (
               <button
@@ -462,7 +498,7 @@ const AIChatPanel = ({ open, onClose }: { open: boolean; onClose: () => void }) 
                 <textarea
                   value={memory}
                   onChange={e => setMemory(e.target.value)}
-                  placeholder="La IA guardará contexto importante aquí. También puedes editarlo manualmente..."
+                  placeholder="La IA guardará contexto importante aquí..."
                   className="w-full bg-muted border border-border rounded-md p-2 text-[11px] text-foreground min-h-[200px] resize-y scrollbar-thin"
                 />
                 <Button variant="outline" size="sm" onClick={summarizeSession} className="w-full text-[10px] gap-1">
@@ -491,7 +527,6 @@ const AIChatPanel = ({ open, onClose }: { open: boolean; onClose: () => void }) 
 
       {/* Main chat area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
         <div className="flex items-center justify-between p-3 border-b border-border bg-secondary/50 shrink-0">
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="h-7 w-7">
@@ -510,7 +545,6 @@ const AIChatPanel = ({ open, onClose }: { open: boolean; onClose: () => void }) 
           </Button>
         </div>
 
-        {/* Progress bar */}
         {progressInfo && (
           <div className="px-3 py-2 border-b border-border bg-secondary/30">
             <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
@@ -521,7 +555,6 @@ const AIChatPanel = ({ open, onClose }: { open: boolean; onClose: () => void }) 
           </div>
         )}
 
-        {/* Messages */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-3">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center gap-3 opacity-60">
@@ -529,7 +562,7 @@ const AIChatPanel = ({ open, onClose }: { open: boolean; onClose: () => void }) 
               <div>
                 <p className="font-display text-lg text-primary tracking-wider">Aurora AI</p>
                 <p className="text-xs text-muted-foreground mt-1 max-w-[280px]">
-                  Editor inteligente de BBGM. Puedo crear jugadores, modificar equipos, actualizar datos y más. Los cambios se aplican automáticamente.
+                  Editor inteligente de BBGM. Puedo crear jugadores, modificar equipos, actualizar datos y más.
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-1.5 mt-2 w-full max-w-[400px]">
@@ -570,7 +603,6 @@ const AIChatPanel = ({ open, onClose }: { open: boolean; onClose: () => void }) 
           )}
         </div>
 
-        {/* Attachments bar */}
         {(attachedFile || showUrlInput) && (
           <div className="px-3 pb-1 flex items-center gap-2 text-xs">
             {attachedFile && (

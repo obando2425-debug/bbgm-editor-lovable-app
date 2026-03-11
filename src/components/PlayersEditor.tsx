@@ -56,6 +56,18 @@ const PlayersEditor = () => {
   const players = league?.players || [];
   const teams = league?.teams || [];
 
+  // Listen for global search navigation
+  React.useEffect(() => {
+    const handler = (e: Event) => {
+      const idx = (e as CustomEvent).detail?.index;
+      if (typeof idx === "number" && idx < players.length) {
+        openEdit(idx);
+      }
+    };
+    window.addEventListener("bbgm-open-player", handler);
+    return () => window.removeEventListener("bbgm-open-player", handler);
+  }, [players]);
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   const filtered = useMemo(() => {
