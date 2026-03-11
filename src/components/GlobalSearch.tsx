@@ -9,6 +9,8 @@ interface SearchResult {
   value: string;
   context: string;
   index?: number;
+  playerIdx?: number;
+  teamIdx?: number;
 }
 
 const SECTION_TAB_MAP: Record<string, string> = {
@@ -18,7 +20,6 @@ const SECTION_TAB_MAP: Record<string, string> = {
   awards: "awards",
   events: "trades",
   gameAttributes: "settings",
-  coaches: "staff",
 };
 
 const GlobalSearch = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
@@ -35,9 +36,16 @@ const GlobalSearch = ({ open, onClose }: { open: boolean; onClose: () => void })
       if (found.length >= maxResults) return;
       if (obj == null) return;
       if (typeof obj === "string" && obj.toLowerCase().includes(q)) {
-        found.push({ section, path, value: obj.slice(0, 100), context: path, index });
+        const result: SearchResult = { section, path, value: obj.slice(0, 100), context: path, index };
+        // Track player/team indices for direct navigation
+        if (section === "players" && typeof index === "number") result.playerIdx = index;
+        if (section === "teams" && typeof index === "number") result.teamIdx = index;
+        found.push(result);
       } else if (typeof obj === "number" && String(obj).includes(query)) {
-        found.push({ section, path, value: String(obj), context: path, index });
+        const result: SearchResult = { section, path, value: String(obj), context: path, index };
+        if (section === "players" && typeof index === "number") result.playerIdx = index;
+        if (section === "teams" && typeof index === "number") result.teamIdx = index;
+        found.push(result);
       } else if (Array.isArray(obj)) {
         obj.forEach((item, i) => {
           if (found.length >= maxResults) return;
@@ -47,7 +55,10 @@ const GlobalSearch = ({ open, onClose }: { open: boolean; onClose: () => void })
         Object.entries(obj).forEach(([k, v]) => {
           if (found.length >= maxResults) return;
           if (k.toLowerCase().includes(q)) {
-            found.push({ section, path: `${path}.${k}`, value: String(v).slice(0, 80), context: `key: ${k}`, index });
+            const result: SearchResult = { section, path: `${path}.${k}`, value: String(v).slice(0, 80), context: `key: ${k}`, index };
+            if (section === "players" && typeof index === "number") result.playerIdx = index;
+            if (section === "teams" && typeof index === "number") result.teamIdx = index;
+            found.push(result);
           }
           search(v, section, `${path}.${k}`, index);
         });
@@ -64,6 +75,16 @@ const GlobalSearch = ({ open, onClose }: { open: boolean; onClose: () => void })
     const tab = SECTION_TAB_MAP[result.section];
     if (tab) {
       setActiveTab(tab);
+    }
+    // Dispatch custom event so editors can open the specific element
+    if (result.playerIdx !== undefined) {
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("bbgm-open-player", { detail: { index: result.playerIdx } }));
+      }, 100);
+    } else if (result.teamIdx !== undefined) {
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("bbgm-open-team", { detail: { index: result.teamIdx } }));
+      }, 100);
     }
     onClose();
     setQuery("");

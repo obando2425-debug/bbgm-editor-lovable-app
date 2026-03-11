@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useRef } from "react";
 import { useLeague } from "@/context/LeagueContext";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Search, RefreshCw } from "lucide-react";
 import EditSheet from "@/components/EditSheet";
 import { toast } from "sonner";
 
@@ -16,10 +17,10 @@ const ContractsEditor = () => {
   const players = league?.players || [];
   const teams = league?.teams || [];
 
+  // Show ALL players with contracts (including tid -1 free agents), not just tid >= 0
   const playersWithContracts = useMemo(() => {
     return players
       .map((p: any, i: number) => ({ ...p, _idx: i }))
-      .filter((p: any) => p.contract && p.tid >= 0)
       .filter((p: any) => {
         const matchSearch = !search || `${p.firstName} ${p.lastName}`.toLowerCase().includes(search.toLowerCase());
         const matchTeam = !teamFilter || String(p.tid) === teamFilter;
@@ -43,7 +44,7 @@ const ContractsEditor = () => {
     if (editingIdx === null || !localContract) return;
     const updated = [...players];
     const { _playerIdx, _name, _tid, ...contract } = localContract;
-    updated[editingIdx] = { ...updated[editingIdx], contract };
+    updated[editingIdx] = { ...updated[editingIdx], contract, tid: _tid };
     updatePlayers(updated);
     setEditingIdx(null);
     setLocalContract(null);
@@ -56,6 +57,28 @@ const ContractsEditor = () => {
     }
   };
 
+  const syncContracts = () => {
+    const season = (() => {
+      const ga = league?.gameAttributes;
+      if (Array.isArray(ga)) return (ga as any[]).find((a: any) => a.key === "season")?.value || 2025;
+      return (ga as any)?.season || 2025;
+    })();
+    let count = 0;
+    const updated = players.map((p: any) => {
+      if (!p.contract || (!p.contract.amount && !p.contract.exp)) {
+        count++;
+        return { ...p, contract: { amount: 1000, exp: season + 2 } };
+      }
+      return p;
+    });
+    if (count > 0) {
+      updatePlayers(updated);
+      toast.success(`${count} contratos generados`);
+    } else {
+      toast.info("Todos los jugadores ya tienen contrato");
+    }
+  };
+
   return (
     <div className="animate-fade-in">
       <div className="flex flex-wrap gap-3 mb-4">
@@ -65,8 +88,12 @@ const ContractsEditor = () => {
         </div>
         <select value={teamFilter} onChange={e => setTeamFilter(e.target.value)} className="bg-card border border-border rounded-md px-3 py-2 text-sm text-foreground">
           <option value="">Todos los equipos</option>
-          {teams.map((t: any) => <option key={t.tid} value={t.tid}>{t.abbrev} - {t.region}</option>)}
+          <option value="-1">Free Agents</option>
+          {teams.map((t: any) => <option key={t.tid} value={t.tid}>{t.abbrev} - {(t as any).region}</option>)}
         </select>
+        <Button variant="outline" size="sm" onClick={syncContracts} className="gap-1 text-xs">
+          <RefreshCw className="w-3.5 h-3.5" /> Sincronizar
+        </Button>
       </div>
 
       {totalSalary !== null && (
@@ -96,7 +123,7 @@ const ContractsEditor = () => {
                   <td className="p-3 font-medium">{p.firstName} {p.lastName}</td>
                   <td className="p-3">
                     <span className="px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium">
-                      {teams.find((t: any) => t.tid === p.tid)?.abbrev || `T${p.tid}`}
+                      {p.tid === -1 ? "FA" : p.tid === -2 ? "RET" : teams.find((t: any) => t.tid === p.tid)?.abbrev || `T${p.tid}`}
                     </span>
                   </td>
                   <td className="p-3 text-primary font-bold">${((p.contract?.amount || 0) / 1000).toFixed(1)}M</td>
@@ -110,7 +137,6 @@ const ContractsEditor = () => {
         </div>
       </div>
 
-      {/* Edit Contract Sheet */}
       <EditSheet
         open={editingIdx !== null}
         onClose={() => { setEditingIdx(null); setLocalContract(null); }}
@@ -128,20 +154,11 @@ const ContractsEditor = () => {
               <label className="text-xs text-muted-foreground mb-1 block">Equipo</label>
               <select
                 value={localContract._tid ?? -1}
-                onChange={e => {
-                  const newTid = parseInt(e.target.value);
-                  setLocalContract((prev: any) => ({ ...prev, _tid: newTid }));
-                  // Also update the player's tid
-                  if (editingIdx !== null) {
-                    const updated = [...players];
-                    updated[editingIdx] = { ...updated[editingIdx], tid: newTid };
-                    updatePlayers(updated);
-                  }
-                }}
+                onChange={e => setLocalContract((prev: any) => ({ ...prev, _tid: parseInt(e.target.value) }))}
                 className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground"
               >
                 <option value={-1}>Free Agent</option>
-                {teams.map((t: any) => <option key={t.tid} value={t.tid}>{t.abbrev} — {t.region} {t.name}</option>)}
+                {teams.map((t: any) => <option key={t.tid} value={t.tid}>{t.abbrev} — {(t as any).region} {(t as any).name}</option>)}
               </select>
             </div>
             <div className="grid grid-cols-2 gap-4">
