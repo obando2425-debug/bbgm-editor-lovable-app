@@ -99,7 +99,7 @@ const GenericSectionEditor = ({ sectionKey, itemLabel }: Props) => {
           ) : (
             <Input
               type={typeof val === "number" ? "number" : "text"}
-              value={val ?? ""}
+              value={String(val ?? "")}
               onChange={e => updateLocalField(fullPath, typeof val === "number" ? parseFloat(e.target.value) || 0 : e.target.value)}
               className="bg-muted border-border h-7 text-xs"
             />
