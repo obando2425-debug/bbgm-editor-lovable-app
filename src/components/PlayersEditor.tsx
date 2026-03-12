@@ -2,10 +2,12 @@ import React, { useState, useMemo, useRef } from "react";
 import { useLeague } from "@/context/LeagueContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Trash2, Copy, GripVertical } from "lucide-react";
+import { Search, Trash2, Copy, GripVertical, ChevronDown, ChevronRight } from "lucide-react";
 import type { BBGMPlayer } from "@/types/bbgm";
 import { toast } from "sonner";
 import EditSheet from "@/components/EditSheet";
+import { PLAYER_FIELDS } from "@/lib/bbgm-schema";
+import { addNotification } from "@/lib/bbgm-notifications";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 
@@ -13,11 +15,9 @@ const SortableRow = ({ player, idx, teamName, openEdit, duplicatePlayer, deleteP
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: idx });
   const style = {
     transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
-    transition,
-    opacity: isDragging ? 0.5 : 1,
+    transition, opacity: isDragging ? 0.5 : 1,
   };
   const lr = player.ratings?.[player.ratings.length - 1];
-
   return (
     <tr ref={setNodeRef} style={style} className="border-t border-border hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => openEdit(idx)}>
       <td className="p-2 w-8" {...attributes} {...listeners} onClick={e => e.stopPropagation()}>
@@ -25,20 +25,15 @@ const SortableRow = ({ player, idx, teamName, openEdit, duplicatePlayer, deleteP
       </td>
       <td className="p-3 font-medium">{player.firstName} {player.lastName}</td>
       <td className="p-3 text-muted-foreground">{player.pos || "—"}</td>
-      <td className="p-3">
-        <span className="px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium">{teamName(player.tid ?? -1)}</span>
-      </td>
+      <td className="p-3"><span className="px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium">{teamName(player.tid ?? -1)}</span></td>
       <td className="p-3 text-muted-foreground">{player.age ?? "—"}</td>
       <td className="p-3 font-medium">{lr?.ovr ?? "—"}</td>
       <td className="p-3 text-primary font-medium">{lr?.pot ?? "—"}</td>
       <td className="p-3 text-muted-foreground">{player.contract ? `$${((player.contract.amount ?? 0) / 1000).toFixed(1)}M` : "—"}</td>
+      <td className="p-3 text-muted-foreground text-xs">{player.injury?.type !== "Healthy" && player.injury?.type ? player.injury.type : "—"}</td>
       <td className="p-3 flex gap-1" onClick={e => e.stopPropagation()}>
-        <Button variant="ghost" size="icon" onClick={() => duplicatePlayer(idx)} className="h-7 w-7" title="Duplicar">
-          <Copy className="w-3.5 h-3.5" />
-        </Button>
-        <Button variant="ghost" size="icon" onClick={() => deletePlayer(idx)} className="h-7 w-7 text-destructive" title="Eliminar">
-          <Trash2 className="w-3.5 h-3.5" />
-        </Button>
+        <Button variant="ghost" size="icon" onClick={() => duplicatePlayer(idx)} className="h-7 w-7" title="Duplicar"><Copy className="w-3.5 h-3.5" /></Button>
+        <Button variant="ghost" size="icon" onClick={() => deletePlayer(idx)} className="h-7 w-7 text-destructive" title="Eliminar"><Trash2 className="w-3.5 h-3.5" /></Button>
       </td>
     </tr>
   );
@@ -52,17 +47,15 @@ const PlayersEditor = () => {
   const [posFilter, setPosFilter] = useState("");
   const [localPlayer, setLocalPlayer] = useState<any>(null);
   const prevPlayerRef = useRef<any>(null);
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set(["basic", "ratings", "contract"]));
 
   const players = league?.players || [];
   const teams = league?.teams || [];
 
-  // Listen for global search navigation
   React.useEffect(() => {
     const handler = (e: Event) => {
       const idx = (e as CustomEvent).detail?.index;
-      if (typeof idx === "number" && idx < players.length) {
-        openEdit(idx);
-      }
+      if (typeof idx === "number" && idx < players.length) openEdit(idx);
     };
     window.addEventListener("bbgm-open-player", handler);
     return () => window.removeEventListener("bbgm-open-player", handler);
@@ -71,14 +64,12 @@ const PlayersEditor = () => {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   const filtered = useMemo(() => {
-    return players
-      .map((p, i) => ({ ...p, _idx: i }))
-      .filter(p => {
-        const matchSearch = !search || `${p.firstName} ${p.lastName}`.toLowerCase().includes(search.toLowerCase()) || (p.college || "").toLowerCase().includes(search.toLowerCase());
-        const matchTeam = !teamFilter || String(p.tid) === teamFilter;
-        const matchPos = !posFilter || (p.pos || "").toLowerCase() === posFilter.toLowerCase();
-        return matchSearch && matchTeam && matchPos;
-      });
+    return players.map((p, i) => ({ ...p, _idx: i })).filter(p => {
+      const matchSearch = !search || `${p.firstName} ${p.lastName}`.toLowerCase().includes(search.toLowerCase()) || (p.college || "").toLowerCase().includes(search.toLowerCase());
+      const matchTeam = !teamFilter || String(p.tid) === teamFilter;
+      const matchPos = !posFilter || (p.pos || "").toLowerCase() === posFilter.toLowerCase();
+      return matchSearch && matchTeam && matchPos;
+    });
   }, [players, search, teamFilter, posFilter]);
 
   const sortableIds = useMemo(() => filtered.map(p => p._idx), [filtered]);
@@ -86,6 +77,7 @@ const PlayersEditor = () => {
   const teamName = (tid: number) => {
     if (tid === -1) return "FA";
     if (tid === -2) return "Retired";
+    if (tid === -3) return "HoF";
     const team = teams.find(t => t.tid === tid);
     return team ? `${team.region} ${team.name}` : `T${tid}`;
   };
@@ -93,9 +85,7 @@ const PlayersEditor = () => {
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIndex = active.id as number;
-    const newIndex = over.id as number;
-    updatePlayers(arrayMove(players, oldIndex, newIndex));
+    updatePlayers(arrayMove(players, active.id as number, over.id as number));
     toast.success("Jugador reordenado");
   };
 
@@ -122,6 +112,20 @@ const PlayersEditor = () => {
 
   const updateField = (field: string, value: any) => {
     setLocalPlayer((prev: any) => ({ ...prev, [field]: value }));
+  };
+
+  const updateNestedField = (path: string, value: any) => {
+    setLocalPlayer((prev: any) => {
+      const copy = JSON.parse(JSON.stringify(prev));
+      const parts = path.split(".");
+      let obj = copy;
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (!obj[parts[i]]) obj[parts[i]] = {};
+        obj = obj[parts[i]];
+      }
+      obj[parts[parts.length - 1]] = value;
+      return copy;
+    });
   };
 
   const updateRatingLocal = (ratingField: string, value: number) => {
@@ -153,6 +157,7 @@ const PlayersEditor = () => {
       hgt: 75, weight: 190, born: { year: 2004, loc: "" },
       ratings: [{ ovr: 50, pot: 60, hgt: 50, stre: 50, spd: 50, jmp: 50, endu: 50, ins: 50, dnk: 50, ft: 50, fg: 50, tp: 50, oiq: 50, diq: 50, drb: 50, pss: 50, reb: 50 }],
       contract: { amount: 1000, exp: 2025 },
+      injury: { type: "Healthy", gamesRemaining: 0 },
     };
     const updated = [...players, newPlayer];
     updatePlayers(updated);
@@ -163,14 +168,33 @@ const PlayersEditor = () => {
   const exportPlayers = () => {
     const blob = new Blob([JSON.stringify(filtered.map(({ _idx, ...p }) => p), null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "players.json"; a.click();
+    const a = document.createElement("a"); a.href = url; a.download = "players.json"; a.click();
     URL.revokeObjectURL(url);
     toast.success("Jugadores exportados");
   };
 
-  const ratingFields = ["ovr", "pot", "hgt", "stre", "spd", "jmp", "endu", "ins", "dnk", "ft", "fg", "tp", "oiq", "diq", "drb", "pss", "reb"];
   const lastRating = localPlayer?.ratings?.[localPlayer.ratings.length - 1];
+
+  const toggleSection = (s: string) => {
+    setOpenSections(prev => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; });
+  };
+
+  const SectionHeader = ({ id, title }: { id: string; title: string }) => (
+    <button onClick={() => toggleSection(id)} className="flex items-center gap-2 w-full">
+      {openSections.has(id) ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />}
+      <h4 className="text-xs font-display tracking-wider text-primary uppercase">{title}</h4>
+    </button>
+  );
+
+  // Collect unknown fields not covered by schema
+  const knownKeys = new Set([
+    ...PLAYER_FIELDS.basic.map(f => f.key),
+    ...PLAYER_FIELDS.advanced.map(f => f.key),
+    "born", "contract", "ratings", "stats", "injury", "draft", "salaries", "awards",
+    "injuries", "moodTraits", "statsTids", "relatives", "transactions", "tid",
+    "jerseyNumber", "college", "imgURL", "_idx",
+  ]);
+  const customFields = localPlayer ? Object.keys(localPlayer).filter(k => !knownKeys.has(k)) : [];
 
   return (
     <div className="animate-fade-in">
@@ -187,7 +211,7 @@ const PlayersEditor = () => {
         </select>
         <select value={posFilter} onChange={e => setPosFilter(e.target.value)} className="bg-card border border-border rounded-md px-3 py-2 text-sm text-foreground">
           <option value="">Todas las pos</option>
-          {["PG", "SG", "SF", "PF", "C"].map(p => <option key={p} value={p}>{p}</option>)}
+          {["PG", "SG", "SF", "PF", "C", "G", "GF", "F", "FC"].map(p => <option key={p} value={p}>{p}</option>)}
         </select>
         <Button onClick={addPlayer} className="gap-2">+ Añadir</Button>
         <Button onClick={exportPlayers} variant="outline" size="sm" className="gap-1 text-xs">Exportar</Button>
@@ -209,21 +233,14 @@ const PlayersEditor = () => {
                   <th className="text-left p-3 font-medium">OVR</th>
                   <th className="text-left p-3 font-medium">POT</th>
                   <th className="text-left p-3 font-medium">Contrato</th>
+                  <th className="text-left p-3 font-medium">Lesión</th>
                   <th className="p-3 font-medium w-28"></th>
                 </tr>
               </thead>
               <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
                 <tbody>
                   {filtered.map(player => (
-                    <SortableRow
-                      key={player._idx}
-                      player={player}
-                      idx={player._idx}
-                      teamName={teamName}
-                      openEdit={openEdit}
-                      duplicatePlayer={duplicatePlayer}
-                      deletePlayer={deletePlayer}
-                    />
+                    <SortableRow key={player._idx} player={player} idx={player._idx} teamName={teamName} openEdit={openEdit} duplicatePlayer={duplicatePlayer} deletePlayer={deletePlayer} />
                   ))}
                 </tbody>
               </SortableContext>
@@ -232,7 +249,6 @@ const PlayersEditor = () => {
         </div>
       </div>
 
-      {/* Edit Sheet */}
       <EditSheet
         open={editingIdx !== null}
         onClose={() => { setEditingIdx(null); setLocalPlayer(null); }}
@@ -246,20 +262,21 @@ const PlayersEditor = () => {
         exportFileName={`player-${localPlayer?.firstName || ""}.json`}
       >
         {localPlayer && (
-          <div className="space-y-6">
-            <div>
-              <h4 className="text-xs font-display tracking-wider text-primary mb-3 uppercase">Información básica</h4>
+          <div className="space-y-4">
+            {/* Basic info */}
+            <SectionHeader id="basic" title="Información básica" />
+            {openSections.has("basic") && (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {[
-                  { f: "firstName", l: "Nombre" }, { f: "lastName", l: "Apellido" },
-                  { f: "pos", l: "Posición" },
-                  { f: "age", l: "Edad", t: "number" }, { f: "hgt", l: "Altura (in)", t: "number" },
-                  { f: "weight", l: "Peso (lbs)", t: "number" }, { f: "jerseyNumber", l: "Jersey #" },
-                  { f: "college", l: "College" }, { f: "imgURL", l: "Img URL" },
-                ].map(({ f, l, t }) => (
-                  <div key={f}>
-                    <label className="text-xs text-muted-foreground mb-1 block">{l}</label>
-                    <Input type={t || "text"} value={localPlayer[f] ?? ""} onChange={e => updateField(f, t === "number" ? parseInt(e.target.value) || 0 : e.target.value)} className="bg-muted border-border" />
+                {PLAYER_FIELDS.basic.map(({ key, label, type, options }) => (
+                  <div key={key}>
+                    <label className="text-xs text-muted-foreground mb-1 block">{label}</label>
+                    {type === "select" && options ? (
+                      <select value={localPlayer[key] ?? ""} onChange={e => updateField(key, e.target.value)} className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground">
+                        {options.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    ) : (
+                      <Input type={type} value={localPlayer[key] ?? ""} onChange={e => updateField(key, type === "number" ? parseInt(e.target.value) || 0 : e.target.value)} className="bg-muted border-border" />
+                    )}
                   </div>
                 ))}
                 <div>
@@ -271,56 +288,206 @@ const PlayersEditor = () => {
                   </select>
                 </div>
               </div>
-            </div>
+            )}
 
-            <div>
-              <h4 className="text-xs font-display tracking-wider text-primary mb-3 uppercase">Contrato</h4>
+            {/* Contract */}
+            <SectionHeader id="contract" title="Contrato" />
+            {openSections.has("contract") && (
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Salario ($K)</label>
-                  <Input type="number" value={localPlayer.contract?.amount ?? ""} onChange={e => updateField("contract", { ...localPlayer.contract, amount: parseInt(e.target.value) || 0 })} className="bg-muted border-border" />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Expiración</label>
-                  <Input type="number" value={localPlayer.contract?.exp ?? ""} onChange={e => updateField("contract", { ...localPlayer.contract, exp: parseInt(e.target.value) || 0 })} className="bg-muted border-border" />
-                </div>
-              </div>
-            </div>
-
-            {lastRating && (
-              <div>
-                <h4 className="text-xs font-display tracking-wider text-primary mb-3 uppercase">Ratings</h4>
-                <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-                  {ratingFields.map(rf => (
-                    <div key={rf}>
-                      <label className="text-[10px] text-muted-foreground uppercase block mb-0.5">{rf}</label>
-                      <Input type="number" min={0} max={100} value={lastRating[rf] ?? 0} onChange={e => updateRatingLocal(rf, parseInt(e.target.value) || 0)} className="bg-muted border-border h-8 text-xs" />
-                    </div>
-                  ))}
-                </div>
+                {PLAYER_FIELDS.contract.map(({ key, label }) => (
+                  <div key={key}>
+                    <label className="text-xs text-muted-foreground mb-1 block">{label}</label>
+                    <Input type="number" value={localPlayer.contract?.[key] ?? ""} onChange={e => updateNestedField(`contract.${key}`, parseInt(e.target.value) || 0)} className="bg-muted border-border" />
+                  </div>
+                ))}
               </div>
             )}
 
-            <div>
-              <h4 className="text-xs font-display tracking-wider text-primary mb-3 uppercase">Nacimiento</h4>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Año</label>
-                  <Input type="number" value={localPlayer.born?.year ?? ""} onChange={e => updateField("born", { ...localPlayer.born, year: parseInt(e.target.value) || 0 })} className="bg-muted border-border" />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Lugar</label>
-                  <Input value={localPlayer.born?.loc ?? ""} onChange={e => updateField("born", { ...localPlayer.born, loc: e.target.value })} className="bg-muted border-border" />
-                </div>
+            {/* Ratings */}
+            <SectionHeader id="ratings" title="Ratings" />
+            {openSections.has("ratings") && lastRating && (
+              <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                {PLAYER_FIELDS.ratings.map(rf => (
+                  <div key={rf}>
+                    <label className="text-[10px] text-muted-foreground uppercase block mb-0.5" title={PLAYER_FIELDS.ratingLabels[rf]}>
+                      {rf} <span className="text-muted-foreground/50">({PLAYER_FIELDS.ratingLabels[rf]})</span>
+                    </label>
+                    <Input type="number" min={0} max={100} value={lastRating[rf] ?? 0} onChange={e => updateRatingLocal(rf, parseInt(e.target.value) || 0)} className="bg-muted border-border h-8 text-xs" />
+                  </div>
+                ))}
               </div>
-            </div>
+            )}
 
-            <div>
-              <h4 className="text-xs font-display tracking-wider text-primary mb-3 uppercase">JSON completo</h4>
-              <pre className="text-[10px] bg-muted rounded-lg p-3 overflow-auto max-h-48 text-muted-foreground">
-                {JSON.stringify(localPlayer, null, 2)}
-              </pre>
-            </div>
+            {/* Born */}
+            <SectionHeader id="born" title="Nacimiento" />
+            {openSections.has("born") && (
+              <div className="grid grid-cols-2 gap-3">
+                {PLAYER_FIELDS.born.map(({ key, label, type }) => (
+                  <div key={key}>
+                    <label className="text-xs text-muted-foreground mb-1 block">{label}</label>
+                    <Input type={type} value={localPlayer.born?.[key] ?? ""} onChange={e => updateNestedField(`born.${key}`, type === "number" ? parseInt(e.target.value) || 0 : e.target.value)} className="bg-muted border-border" />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Draft */}
+            <SectionHeader id="draft" title="Draft" />
+            {openSections.has("draft") && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {PLAYER_FIELDS.draft.map(({ key, label, type }) => (
+                  <div key={key}>
+                    <label className="text-xs text-muted-foreground mb-1 block">{label}</label>
+                    <Input type={type} value={localPlayer.draft?.[key] ?? ""} onChange={e => updateNestedField(`draft.${key}`, type === "number" ? parseInt(e.target.value) || 0 : e.target.value)} className="bg-muted border-border" />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Injury */}
+            <SectionHeader id="injury" title="Lesión" />
+            {openSections.has("injury") && (
+              <div className="grid grid-cols-2 gap-3">
+                {PLAYER_FIELDS.injury.map(({ key, label, type }) => (
+                  <div key={key}>
+                    <label className="text-xs text-muted-foreground mb-1 block">{label}</label>
+                    <Input type={type} value={localPlayer.injury?.[key] ?? ""} onChange={e => updateNestedField(`injury.${key}`, type === "number" ? parseInt(e.target.value) || 0 : e.target.value)} className="bg-muted border-border" />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Advanced */}
+            <SectionHeader id="advanced" title="Avanzado" />
+            {openSections.has("advanced") && (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {PLAYER_FIELDS.advanced.map(({ key, label, type }) => (
+                  <div key={key}>
+                    <label className="text-xs text-muted-foreground mb-1 block">{label}</label>
+                    {type === "boolean" ? (
+                      <button onClick={() => updateField(key, !localPlayer[key])} className={`w-10 h-5 rounded-full transition-colors ${localPlayer[key] ? "bg-primary" : "bg-muted-foreground/30"}`}>
+                        <div className={`w-4 h-4 rounded-full bg-card shadow transition-transform ${localPlayer[key] ? "translate-x-5" : "translate-x-0.5"}`} />
+                      </button>
+                    ) : (
+                      <Input type={type} value={localPlayer[key] ?? ""} onChange={e => updateField(key, type === "number" ? parseFloat(e.target.value) || 0 : e.target.value)} className="bg-muted border-border" />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Mood Traits */}
+            <SectionHeader id="mood" title="Mood Traits" />
+            {openSections.has("mood") && (
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Traits (separados por coma: $, L, W, F)</label>
+                <Input value={(localPlayer.moodTraits || []).join(", ")} onChange={e => updateField("moodTraits", e.target.value.split(",").map((s: string) => s.trim()).filter(Boolean))} className="bg-muted border-border" />
+              </div>
+            )}
+
+            {/* Relatives */}
+            <SectionHeader id="relatives" title="Familiares" />
+            {openSections.has("relatives") && (
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Relatives (JSON)</label>
+                <textarea value={JSON.stringify(localPlayer.relatives || [], null, 1)} onChange={e => { try { updateField("relatives", JSON.parse(e.target.value)); } catch {} }} className="w-full bg-muted border border-border rounded-md p-2 text-[10px] font-mono text-foreground h-16 resize-y" />
+              </div>
+            )}
+
+            {/* Salaries History */}
+            <SectionHeader id="salaries" title={`Historial Salarial (${(localPlayer.salaries || []).length})`} />
+            {openSections.has("salaries") && (
+              <div className="max-h-32 overflow-y-auto scrollbar-thin space-y-1">
+                {(localPlayer.salaries || []).map((s: any, i: number) => (
+                  <div key={i} className="flex gap-2 items-center text-xs">
+                    <span className="text-muted-foreground w-12">{s.season}</span>
+                    <span className="text-primary font-medium">${(s.amount / 1000).toFixed(1)}M</span>
+                  </div>
+                ))}
+                {(localPlayer.salaries || []).length === 0 && <p className="text-xs text-muted-foreground">Sin historial</p>}
+              </div>
+            )}
+
+            {/* Injuries History */}
+            <SectionHeader id="injuries" title={`Historial Lesiones (${(localPlayer.injuries || []).length})`} />
+            {openSections.has("injuries") && (
+              <div className="max-h-32 overflow-y-auto scrollbar-thin space-y-1">
+                {(localPlayer.injuries || []).map((inj: any, i: number) => (
+                  <div key={i} className="flex gap-2 items-center text-xs">
+                    <span className="text-muted-foreground w-12">{inj.season}</span>
+                    <span className="text-foreground">{inj.type}</span>
+                    <span className="text-muted-foreground">({inj.games} juegos)</span>
+                  </div>
+                ))}
+                {(localPlayer.injuries || []).length === 0 && <p className="text-xs text-muted-foreground">Sin lesiones</p>}
+              </div>
+            )}
+
+            {/* Transactions */}
+            <SectionHeader id="transactions" title={`Transacciones (${(localPlayer.transactions || []).length})`} />
+            {openSections.has("transactions") && (
+              <div className="max-h-32 overflow-y-auto scrollbar-thin space-y-1">
+                {(localPlayer.transactions || []).map((tx: any, i: number) => (
+                  <div key={i} className="flex gap-2 items-center text-xs">
+                    <span className="text-muted-foreground w-12">{tx.season}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px]">{tx.type}</span>
+                    <span className="text-foreground">→ {teamName(tx.tid)}</span>
+                  </div>
+                ))}
+                {(localPlayer.transactions || []).length === 0 && <p className="text-xs text-muted-foreground">Sin transacciones</p>}
+              </div>
+            )}
+
+            {/* Stats summary */}
+            <SectionHeader id="stats" title={`Stats (${(localPlayer.stats || []).length} temporadas)`} />
+            {openSections.has("stats") && (
+              <div className="max-h-48 overflow-y-auto scrollbar-thin">
+                {(localPlayer.stats || []).length > 0 ? (
+                  <table className="w-full text-[10px]">
+                    <thead><tr className="text-muted-foreground"><th className="text-left p-1">Temp</th><th className="text-left p-1">Eq</th><th className="text-right p-1">GP</th><th className="text-right p-1">PTS</th><th className="text-right p-1">AST</th><th className="text-right p-1">REB</th><th className="text-right p-1">PER</th></tr></thead>
+                    <tbody>
+                      {localPlayer.stats.map((s: any, i: number) => (
+                        <tr key={i} className="border-t border-border">
+                          <td className="p-1">{s.season}{s.playoffs ? " P" : ""}</td>
+                          <td className="p-1">{teamName(s.tid)}</td>
+                          <td className="p-1 text-right">{s.gp}</td>
+                          <td className="p-1 text-right">{s.pts}</td>
+                          <td className="p-1 text-right">{s.ast}</td>
+                          <td className="p-1 text-right">{(s.orb || 0) + (s.drb || 0)}</td>
+                          <td className="p-1 text-right">{(s.per || 0).toFixed(1)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : <p className="text-xs text-muted-foreground">Sin stats</p>}
+              </div>
+            )}
+
+            {/* Custom fields */}
+            {customFields.length > 0 && (
+              <>
+                <SectionHeader id="custom" title={`Campos personalizados (${customFields.length})`} />
+                {openSections.has("custom") && (
+                  <div className="grid grid-cols-2 gap-3">
+                    {customFields.map(key => {
+                      const val = localPlayer[key];
+                      if (typeof val === "object") return (
+                        <div key={key} className="col-span-2">
+                          <label className="text-[10px] text-muted-foreground block mb-0.5">{key}</label>
+                          <textarea value={JSON.stringify(val, null, 1)} onChange={e => { try { updateField(key, JSON.parse(e.target.value)); } catch {} }} className="w-full bg-muted border border-border rounded-md p-2 text-[10px] font-mono text-foreground h-16 resize-y" />
+                        </div>
+                      );
+                      return (
+                        <div key={key}>
+                          <label className="text-[10px] text-muted-foreground block mb-0.5">{key}</label>
+                          <Input type={typeof val === "number" ? "number" : "text"} value={String(val ?? "")} onChange={e => updateField(key, typeof val === "number" ? parseFloat(e.target.value) || 0 : e.target.value)} className="bg-muted border-border h-8 text-xs" />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
       </EditSheet>
