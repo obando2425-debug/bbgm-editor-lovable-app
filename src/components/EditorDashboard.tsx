@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import {
   Download, Upload, Users, Trophy, Settings, FileText, ListOrdered,
   Sparkles, Search, History, GitCompare, Award, DollarSign, ArrowLeftRight,
-  Calendar, ExternalLink, FileJson, X, CheckCircle2, AlertCircle, TrendingUp
+  Calendar, ExternalLink, FileJson, X, CheckCircle2, AlertCircle, TrendingUp,
+  Wrench, UserMinus, Crown, MessageSquare
 } from "lucide-react";
 import PlayersEditor from "@/components/PlayersEditor";
 import TeamsEditor from "@/components/TeamsEditor";
@@ -22,19 +23,21 @@ import JsonComparator from "@/components/JsonComparator";
 import AIChatPanel from "@/components/AIChatPanel";
 import GlobalSearch from "@/components/GlobalSearch";
 import SectionInfo from "@/components/SectionInfo";
+import NotificationCenter from "@/components/NotificationCenter";
+import DiagnosticPanel from "@/components/DiagnosticPanel";
+import GenericSectionEditor from "@/components/GenericSectionEditor";
 import { toast } from "sonner";
+import { createSnapshot } from "@/lib/bbgm-snapshots";
 
 const EditorDashboard = () => {
   const { league, fileName, hasChanges, setLeague, setFileName, referenceFiles, addReferenceFile, removeReferenceFile, changeHistory, activeTab, setActiveTab } = useLeague();
   const [aiOpen, setAiOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [diagnosticOpen, setDiagnosticOpen] = useState(false);
 
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        setSearchOpen(true);
-      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setSearchOpen(true); }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -47,6 +50,7 @@ const EditorDashboard = () => {
     const a = document.createElement("a");
     a.href = url; a.download = fileName || "bbgm-edited.json"; a.click();
     URL.revokeObjectURL(url);
+    createSnapshot(league, `Exportación: ${fileName}`);
     toast.success("Archivo descargado");
   };
 
@@ -68,14 +72,18 @@ const EditorDashboard = () => {
     e.target.value = "";
   };
 
-  const isValid = (() => {
-    try { JSON.stringify(league); return true; } catch { return false; }
-  })();
+  const isValid = (() => { try { JSON.stringify(league); return true; } catch { return false; } })();
 
   const stats = {
     players: league?.players?.length || 0,
     teams: league?.teams?.length || 0,
     picks: league?.draftPicks?.length || 0,
+  };
+
+  // Detect dynamic sections from the league JSON that need their own tabs
+  const hasSectionData = (key: string) => {
+    const data = (league as any)?.[key];
+    return Array.isArray(data) ? data.length > 0 : !!data;
   };
 
   return (
@@ -88,20 +96,23 @@ const EditorDashboard = () => {
             {hasChanges && (
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-warning text-warning-foreground font-medium">Sin guardar</span>
             )}
-            <span className={`text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 ${isValid ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}`}>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 ${isValid ? "bg-green-500/10 text-green-400" : "bg-destructive/10 text-destructive"}`}>
               {isValid ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
               {isValid ? "Válido" : "Error"}
             </span>
           </div>
           <div className="flex items-center gap-1.5">
+            <NotificationCenter />
+            <Button variant="ghost" size="sm" onClick={() => setDiagnosticOpen(true)} className="gap-1 text-xs" title="Diagnosticar JSON">
+              <Wrench className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Diagnosticar</span>
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => setSearchOpen(true)} className="gap-1 text-xs" title="Ctrl+K">
               <Search className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Buscar</span>
               <kbd className="hidden md:inline text-[9px] px-1 py-0.5 rounded bg-muted ml-1">⌘K</kbd>
             </Button>
             <Button variant={aiOpen ? "default" : "outline"} size="sm" onClick={() => setAiOpen(!aiOpen)} className="gap-1 text-xs">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Aurora</span>
+              <Sparkles className="w-3.5 h-3.5" /><span className="hidden sm:inline">Aurora</span>
             </Button>
             <label className="cursor-pointer">
               <input type="file" accept=".json" multiple onChange={handleAddReference} className="sr-only" />
@@ -175,6 +186,21 @@ const EditorDashboard = () => {
             <TabsTrigger value="finances" className="gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <TrendingUp className="w-3 h-3" /> Finanzas
             </TabsTrigger>
+            {hasSectionData("retiredPlayers") && (
+              <TabsTrigger value="retired" className="gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <UserMinus className="w-3 h-3" /> Retirados
+              </TabsTrigger>
+            )}
+            {hasSectionData("hallOfFame") && (
+              <TabsTrigger value="halloffame" className="gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Crown className="w-3 h-3" /> Hall of Fame
+              </TabsTrigger>
+            )}
+            {hasSectionData("messages") && (
+              <TabsTrigger value="messages" className="gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <MessageSquare className="w-3 h-3" /> Mensajes
+              </TabsTrigger>
+            )}
             <TabsTrigger value="code" className="gap-1 text-xs data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
               <FileText className="w-3 h-3" /> Code
             </TabsTrigger>
@@ -195,6 +221,15 @@ const EditorDashboard = () => {
           <TabsContent value="seasons"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Historial</h3><SectionInfo section="seasons" /></div><SeasonHistoryEditor /></TabsContent>
           <TabsContent value="settings"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Configuración</h3><SectionInfo section="settings" /></div><GameAttributesEditor /></TabsContent>
           <TabsContent value="finances"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Finanzas</h3><SectionInfo section="finances" /></div><EconomyEditor /></TabsContent>
+          {hasSectionData("retiredPlayers") && (
+            <TabsContent value="retired"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Retirados</h3><SectionInfo section="retired" /></div><GenericSectionEditor sectionKey="retiredPlayers" itemLabel="Jugador Retirado" /></TabsContent>
+          )}
+          {hasSectionData("hallOfFame") && (
+            <TabsContent value="halloffame"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Hall of Fame</h3><SectionInfo section="halloffame" /></div><GenericSectionEditor sectionKey="hallOfFame" itemLabel="Miembro HoF" /></TabsContent>
+          )}
+          {hasSectionData("messages") && (
+            <TabsContent value="messages"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Mensajes</h3><SectionInfo section="messages" /></div><GenericSectionEditor sectionKey="messages" itemLabel="Mensaje" /></TabsContent>
+          )}
           <TabsContent value="code"><CodeEditor /></TabsContent>
           <TabsContent value="compare"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Comparar</h3><SectionInfo section="compare" /></div><JsonComparator /></TabsContent>
           <TabsContent value="history"><div className="flex items-center gap-2 mb-3"><h3 className="font-display text-xl tracking-wider text-primary uppercase">Cambios</h3><SectionInfo section="history" /></div><ChangeHistory /></TabsContent>
@@ -203,6 +238,7 @@ const EditorDashboard = () => {
 
       <AIChatPanel open={aiOpen} onClose={() => setAiOpen(false)} />
       <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
+      {diagnosticOpen && <DiagnosticPanel onClose={() => setDiagnosticOpen(false)} />}
     </div>
   );
 };
