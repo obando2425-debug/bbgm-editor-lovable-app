@@ -48,46 +48,68 @@ const FileUpload = () => {
   const [mergeReport, setMergeReport] = useState<string[] | null>(null);
 
   const processAndLoad = useCallback((data: any, fileName: string) => {
-    // Step 0: Validate
-    const validation = validateBBGMFile(data);
-    if (!validation.valid) {
-      toast.error(validation.error || "Archivo no válido");
-      addNotification({ type: "error", title: "Archivo rechazado", message: validation.error || "No es un JSON de BBGM" });
-      return;
+    try {
+      // Step 0: Validate
+      const validation = validateBBGMFile(data);
+      if (!validation.valid) {
+        toast.error(validation.error || "Archivo no válido");
+        addNotification({ type: "error", title: "Archivo rechazado", message: validation.error || "No es un JSON de BBGM" });
+        return;
+      }
+
+      // Step 1-3: Merge with schema
+      let result: ReturnType<typeof mergeWithSchema>;
+      try {
+        result = mergeWithSchema(data);
+      } catch (mergeErr) {
+        console.error("Merge error:", mergeErr);
+        // Fallback: use data as-is without merge
+        result = { data, completedFields: [], isValid: true };
+        toast.warning("Merge con esquema omitido — se cargó el archivo sin completar campos");
+      }
+      
+      // Step 4: Report completed fields
+      if (result.completedFields.length > 0) {
+        const report = result.completedFields.slice(0, 20);
+        setMergeReport(report);
+        addNotification({
+          type: "info",
+          title: "Merge completado",
+          message: `${result.completedFields.length} campos completados automáticamente: ${report.slice(0, 5).join(", ")}${result.completedFields.length > 5 ? "..." : ""}`,
+        });
+        toast.success(`${result.completedFields.length} campos completados automáticamente`);
+      }
+
+      // Validate after merge (non-critical — wrapped in try-catch)
+      try {
+        const issues = validateLeague(result.data, true);
+        const autoFixed = issues.filter(i => i.autoFixed);
+        if (autoFixed.length > 0) {
+          addNotification({
+            type: "warning",
+            title: "Correcciones automáticas",
+            message: `${autoFixed.length} valores corregidos automáticamente`,
+          });
+        }
+      } catch (valErr) {
+        console.error("Validation error (non-critical):", valErr);
+      }
+
+      // Create initial snapshot (non-critical)
+      try {
+        createSnapshot(result.data, `Carga inicial: ${fileName}`);
+      } catch (snapErr) {
+        console.error("Snapshot error (non-critical):", snapErr);
+      }
+
+      setLeague(result.data);
+      setFileName(fileName);
+      toast.success(`"${fileName}" cargado correctamente (${(result.data.players || []).length} jugadores, ${(result.data.teams || []).length} equipos)`);
+    } catch (err) {
+      console.error("processAndLoad critical error:", err);
+      toast.error(`Error al procesar "${fileName}": ${err instanceof Error ? err.message : "Error desconocido"}`);
+      addNotification({ type: "error", title: "Error al cargar", message: `${fileName}: ${err instanceof Error ? err.message : "Error desconocido"}` });
     }
-
-    // Step 1-3: Merge with schema
-    const result = mergeWithSchema(data);
-    
-    // Step 4: Report completed fields
-    if (result.completedFields.length > 0) {
-      const report = result.completedFields.slice(0, 20);
-      setMergeReport(report);
-      addNotification({
-        type: "info",
-        title: "Merge completado",
-        message: `${result.completedFields.length} campos completados automáticamente: ${report.slice(0, 5).join(", ")}${result.completedFields.length > 5 ? "..." : ""}`,
-      });
-      toast.success(`${result.completedFields.length} campos completados automáticamente`);
-    }
-
-    // Validate after merge
-    const issues = validateLeague(result.data, true);
-    const autoFixed = issues.filter(i => i.autoFixed);
-    if (autoFixed.length > 0) {
-      addNotification({
-        type: "warning",
-        title: "Correcciones automáticas",
-        message: `${autoFixed.length} valores corregidos automáticamente`,
-      });
-    }
-
-    // Create initial snapshot
-    createSnapshot(result.data, `Carga inicial: ${fileName}`);
-
-    setLeague(result.data);
-    setFileName(fileName);
-    toast.success(`"${fileName}" cargado correctamente (${(result.data.players || []).length} jugadores, ${(result.data.teams || []).length} equipos)`);
   }, [setLeague, setFileName]);
 
   const handleFile = useCallback((file: File, asReference: boolean = false) => {
