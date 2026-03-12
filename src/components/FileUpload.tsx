@@ -118,17 +118,28 @@ const FileUpload = () => {
       return;
     }
     const reader = new FileReader();
+    reader.onerror = () => {
+      toast.error(`No se pudo leer el archivo "${file.name}" — verifica que no esté dañado`);
+    };
     reader.onload = (e) => {
+      const raw = e.target?.result;
+      if (typeof raw !== "string" || !raw.trim()) {
+        toast.error(`El archivo "${file.name}" está vacío o no se pudo leer`);
+        return;
+      }
+      let data: any;
       try {
-        const data = JSON.parse(e.target?.result as string);
-        if (asReference) {
-          addReferenceFile(file.name, data);
-          toast.success(`"${file.name}" añadido como referencia`);
-        } else {
-          processAndLoad(data, file.name);
-        }
-      } catch {
-        toast.error("Error al leer el archivo JSON");
+        data = JSON.parse(raw);
+      } catch (parseErr) {
+        const msg = parseErr instanceof Error ? parseErr.message : "JSON inválido";
+        toast.error(`Error de sintaxis JSON en "${file.name}": ${msg}`);
+        return;
+      }
+      if (asReference) {
+        addReferenceFile(file.name, data);
+        toast.success(`"${file.name}" añadido como referencia`);
+      } else {
+        processAndLoad(data, file.name);
       }
     };
     reader.readAsText(file);
