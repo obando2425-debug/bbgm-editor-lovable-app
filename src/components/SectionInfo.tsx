@@ -2,6 +2,18 @@ import React, { useState } from "react";
 import { Info, X } from "lucide-react";
 
 const SECTION_HELP: Record<string, { title: string; content: string }> = {
+  retired: {
+    title: "Retirados",
+    content: "Jugadores retirados de la liga. Puedes ver su historial completo, editar sus datos o eliminarlos."
+  },
+  halloffame: {
+    title: "Hall of Fame",
+    content: "Miembros del Salón de la Fama. Incluye los mejores jugadores históricos de la liga."
+  },
+  messages: {
+    title: "Mensajes",
+    content: "Mensajes del sistema de la liga. Incluye notificaciones de trades, lesiones y otros eventos."
+  },
   players: {
     title: "Jugadores",
     content: "Gestiona todos los jugadores de la liga. Puedes buscar, filtrar por equipo o posición, arrastrar para reordenar, y editar cada jugador individualmente. Los campos incluyen datos personales, contrato, ratings y estadísticas. Usa el botón '+' para crear jugadores nuevos o importar desde JSON."
