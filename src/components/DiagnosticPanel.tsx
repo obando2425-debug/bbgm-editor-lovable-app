@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useLeague } from "@/context/LeagueContext";
 import { Button } from "@/components/ui/button";
-import { generateDiagnosticReport, validateLeague } from "@/lib/bbgm-validator";
+import { generateDiagnosticReport, validateLeague, type ValidationIssue } from "@/lib/bbgm-validator";
 import { AlertCircle, AlertTriangle, CheckCircle2, Info, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { addNotification } from "@/lib/bbgm-notifications";
@@ -14,9 +14,6 @@ const DiagnosticPanel = ({ onClose }: { onClose: () => void }) => {
     if (!league) { toast.error("No hay liga cargada"); return; }
     const r = generateDiagnosticReport(league);
     setReport(r);
-    if (r.errors > 0) {
-      addNotification({ type: "error", title: "Diagnóstico: errores detectados", message: `${r.errors} errores, ${r.warnings} advertencias` });
-    }
   };
 
   const autoFixAll = () => {
@@ -28,13 +25,29 @@ const DiagnosticPanel = ({ onClose }: { onClose: () => void }) => {
     toast.success(`${fixedCount} problemas corregidos`);
     addNotification({ type: "success", title: "Auto-corrección completada", message: `${fixedCount} valores corregidos` });
     setReport(null);
-    runDiagnostic();
+    setTimeout(runDiagnostic, 100);
+  };
+
+  const fixSingle = (issue: ValidationIssue) => {
+    if (!league) return;
+    const fixed = JSON.parse(JSON.stringify(league));
+    // Re-run validation with auto-correct, but only apply the matching fix
+    const issues = validateLeague(fixed, true);
+    const matched = issues.find(i => i.id === issue.id && i.autoFixed);
+    if (matched) {
+      setLeague(fixed);
+      toast.success(`Corregido: ${issue.field}`);
+      setReport(null);
+      setTimeout(runDiagnostic, 100);
+    } else {
+      toast.info("Este problema no tiene corrección automática");
+    }
   };
 
   const severityColor = {
-    error: "text-destructive bg-destructive/10",
-    warning: "text-yellow-400 bg-yellow-500/10",
-    info: "text-blue-400 bg-blue-500/10",
+    error: "text-destructive bg-destructive/10 border-destructive/20",
+    warning: "text-yellow-400 bg-yellow-500/10 border-yellow-500/20",
+    info: "text-blue-400 bg-blue-500/10 border-blue-500/20",
   };
 
   return (
@@ -47,6 +60,7 @@ const DiagnosticPanel = ({ onClose }: { onClose: () => void }) => {
           </div>
           <div className="flex gap-2">
             {!report && <Button size="sm" onClick={runDiagnostic}>Ejecutar diagnóstico</Button>}
+            {report && <Button size="sm" onClick={runDiagnostic} variant="outline">Re-analizar</Button>}
             <Button variant="ghost" size="sm" onClick={onClose}>Cerrar</Button>
           </div>
         </div>
@@ -60,7 +74,7 @@ const DiagnosticPanel = ({ onClose }: { onClose: () => void }) => {
           ) : (
             <div className="space-y-4">
               {/* Summary */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <div className="bg-muted rounded-lg p-3 text-center">
                   <span className="text-2xl font-bold text-primary">{report.completionPercent}%</span>
                   <span className="text-[10px] text-muted-foreground block">Completitud</span>
@@ -74,6 +88,10 @@ const DiagnosticPanel = ({ onClose }: { onClose: () => void }) => {
                   <span className="text-[10px] text-muted-foreground block">Advertencias</span>
                 </div>
                 <div className="bg-muted rounded-lg p-3 text-center">
+                  <span className="text-2xl font-bold text-blue-400">{report.infos}</span>
+                  <span className="text-[10px] text-muted-foreground block">Info</span>
+                </div>
+                <div className="bg-muted rounded-lg p-3 text-center">
                   <span className="text-2xl font-bold text-foreground">{report.totalFields}</span>
                   <span className="text-[10px] text-muted-foreground block">Elementos</span>
                 </div>
@@ -83,13 +101,16 @@ const DiagnosticPanel = ({ onClose }: { onClose: () => void }) => {
               <div>
                 <h3 className="text-xs font-display tracking-wider text-primary mb-2 uppercase">Por sección</h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                  {Object.entries(report.sectionBreakdown).map(([key, val]) => (
+                  {Object.entries(report.sectionBreakdown).filter(([_, val]) => val.total > 0).map(([key, val]) => (
                     <div key={key} className="bg-muted rounded-lg p-2.5">
                       <span className="text-xs font-medium text-foreground capitalize">{key}</span>
                       <div className="flex items-center gap-2 mt-1 text-[10px]">
                         <span className="text-green-400">{val.complete} ok</span>
                         <span className="text-muted-foreground">/ {val.total}</span>
                         {val.errors > 0 && <span className="text-destructive">{val.errors} err</span>}
+                      </div>
+                      <div className="w-full h-1 bg-muted-foreground/20 rounded-full mt-1">
+                        <div className="h-1 bg-green-500 rounded-full" style={{ width: `${val.total > 0 ? (val.complete / val.total) * 100 : 0}%` }} />
                       </div>
                     </div>
                   ))}
@@ -100,7 +121,7 @@ const DiagnosticPanel = ({ onClose }: { onClose: () => void }) => {
               {report.issues.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-xs font-display tracking-wider text-primary uppercase">Problemas detectados</h3>
+                    <h3 className="text-xs font-display tracking-wider text-primary uppercase">Problemas detectados ({report.issues.length})</h3>
                     <Button size="sm" variant="outline" onClick={autoFixAll} className="gap-1 text-xs">
                       <Wrench className="w-3 h-3" /> Corregir todo
                     </Button>
@@ -114,7 +135,15 @@ const DiagnosticPanel = ({ onClose }: { onClose: () => void }) => {
                            <Info className="w-3 h-3 shrink-0" />}
                           <span className="flex-1">{issue.message}</span>
                           {issue.autoFixed && <span className="text-green-400 text-[10px] shrink-0">Auto-corregido</span>}
+                          {!issue.autoFixed && issue.severity !== "info" && (
+                            <Button variant="ghost" size="sm" onClick={() => fixSingle(issue)} className="h-5 text-[10px] px-2">
+                              Corregir
+                            </Button>
+                          )}
                         </div>
+                        {issue.element && (
+                          <span className="text-[10px] opacity-70 ml-5">Elemento: {issue.element} · Campo: {issue.field}</span>
+                        )}
                       </div>
                     ))}
                   </div>
