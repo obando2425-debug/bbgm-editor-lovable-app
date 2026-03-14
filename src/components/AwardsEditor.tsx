@@ -6,6 +6,48 @@ import { Trash2, Copy, Search, Plus } from "lucide-react";
 import { toast } from "sonner";
 import EditSheet from "@/components/EditSheet";
 
+// Spanish labels for award fields
+const AWARD_LABELS: Record<string, string> = {
+  season: "Temporada", type: "Tipo", name: "Nombre", team: "Equipo",
+  pid: "ID Jugador", tid: "ID Equipo", pts: "Puntos", trb: "Rebotes",
+  ast: "Asistencias", stl: "Robos", blk: "Tapones",
+  mvp: "MVP", dpoy: "Defensor del Año", smoy: "Sexto Hombre",
+  mip: "Más Mejorado", roy: "Novato del Año", finalsMvp: "MVP de Finales",
+  allLeague: "All-League", allDefensive: "All-Defensive", allRookie: "All-Rookie",
+  firstName: "Nombre", lastName: "Apellido",
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  mvp: "MVP", dpoy: "Defensor del Año", smoy: "Sexto Hombre",
+  mip: "Más Mejorado", roy: "Novato del Año", finalsMvp: "MVP Finales",
+  allLeague: "All-League", allDefensive: "All-Defensive", allRookie: "All-Rookie",
+  champion: "Campeón",
+};
+
+const getAwardSummary = (award: any): string => {
+  if (!award || typeof award !== "object") return "—";
+  // Named award (has keys like mvp, dpoy, etc.)
+  const namedKeys = ["mvp", "dpoy", "smoy", "mip", "roy", "finalsMvp"];
+  for (const k of namedKeys) {
+    if (award[k]) {
+      const p = award[k];
+      return `${TYPE_LABELS[k] || k}: ${p.name || `${p.firstName || ""} ${p.lastName || ""}`.trim() || "—"}`;
+    }
+  }
+  // Type-based
+  if (award.type) return TYPE_LABELS[award.type] || award.type;
+  if (award.name) return award.name;
+  return Object.keys(award).filter(k => !k.startsWith("_") && k !== "season").slice(0, 3).join(", ");
+};
+
+const renderAwardee = (val: any): string => {
+  if (!val) return "—";
+  if (typeof val === "string") return val;
+  if (val.name) return val.name;
+  if (val.firstName) return `${val.firstName} ${val.lastName || ""}`.trim();
+  return "—";
+};
+
 const AwardsEditor = () => {
   const { league, updateSection } = useLeague();
   const [search, setSearch] = useState("");
@@ -59,21 +101,97 @@ const AwardsEditor = () => {
 
   const duplicateAward = (idx: number) => {
     const updated = [...awards];
-    updated.splice(idx + 1, 0, { ...awards[idx] });
+    updated.splice(idx + 1, 0, JSON.parse(JSON.stringify(awards[idx])));
     updateSection("awards", updated);
     toast.success("Premio duplicado");
   };
 
   const addAward = () => {
-    const season = (league?.gameAttributes as any)?.season || 2025;
-    const newAward = { season, type: "mvp", name: "", team: "" };
+    const season = (() => {
+      const ga = league?.gameAttributes;
+      if (Array.isArray(ga)) return (ga as any[]).find((a: any) => a.key === "season")?.value || 2025;
+      return (ga as any)?.season || 2025;
+    })();
+    const newAward = { season };
     updateSection("awards", [...awards, newAward]);
     openEdit(awards.length);
     toast.success("Premio añadido");
   };
 
-  // Get all editable keys from the award object
-  const awardKeys = localAward ? Object.keys(localAward).filter(k => !k.startsWith("_")) : [];
+  const updateLocalField = (path: string, value: any) => {
+    setLocalAward((prev: any) => {
+      const copy = JSON.parse(JSON.stringify(prev));
+      const parts = path.split(".");
+      let obj = copy;
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (!obj[parts[i]]) obj[parts[i]] = {};
+        obj = obj[parts[i]];
+      }
+      obj[parts[parts.length - 1]] = value;
+      return copy;
+    });
+  };
+
+  const renderAwardField = (key: string, val: any, path: string = "") => {
+    const fullPath = path ? `${path}.${key}` : key;
+    const label = AWARD_LABELS[key] || key;
+
+    if (key.startsWith("_")) return null;
+
+    // Object with sub-fields (like mvp: {pid, name, ...})
+    if (typeof val === "object" && val !== null && !Array.isArray(val)) {
+      return (
+        <div key={fullPath} className="col-span-full border border-border rounded-lg p-3 mt-1">
+          <h5 className="text-xs font-display tracking-wider text-primary uppercase mb-2">{label}</h5>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {Object.entries(val).map(([k, v]) => renderAwardField(k, v, fullPath))}
+          </div>
+        </div>
+      );
+    }
+
+    // Array (like allLeague teams)
+    if (Array.isArray(val)) {
+      return (
+        <div key={fullPath} className="col-span-full">
+          <label className="text-[10px] text-muted-foreground block mb-0.5">{label} ({val.length} elementos)</label>
+          <div className="space-y-1 max-h-32 overflow-y-auto scrollbar-thin">
+            {val.map((item: any, i: number) => (
+              <div key={i} className="text-xs bg-muted rounded p-2">
+                {typeof item === "object" ? (
+                  <span>{item.name || `${item.firstName || ""} ${item.lastName || ""}`.trim() || JSON.stringify(item).slice(0, 80)}</span>
+                ) : (
+                  <span>{String(item)}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // Primitive
+    return (
+      <div key={fullPath}>
+        <label className="text-xs text-muted-foreground mb-1 block">{label}</label>
+        {typeof val === "boolean" ? (
+          <button
+            onClick={() => updateLocalField(fullPath, !val)}
+            className={`w-10 h-5 rounded-full transition-colors ${val ? "bg-primary" : "bg-muted-foreground/30"}`}
+          >
+            <div className={`w-4 h-4 rounded-full bg-card shadow transition-transform ${val ? "translate-x-5" : "translate-x-0.5"}`} />
+          </button>
+        ) : (
+          <Input
+            type={typeof val === "number" ? "number" : "text"}
+            value={val ?? ""}
+            onChange={e => updateLocalField(fullPath, typeof val === "number" ? (parseFloat(e.target.value) || 0) : e.target.value)}
+            className="bg-muted border-border"
+          />
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="animate-fade-in">
@@ -99,24 +217,37 @@ const AwardsEditor = () => {
             <thead className="sticky top-0 z-10">
               <tr className="bg-secondary text-secondary-foreground">
                 <th className="text-left p-3 font-medium">Temporada</th>
-                <th className="text-left p-3 font-medium">Tipo</th>
-                <th className="text-left p-3 font-medium">Datos</th>
+                <th className="text-left p-3 font-medium">Premio</th>
+                <th className="text-left p-3 font-medium">Detalle</th>
                 <th className="p-3 w-24"></th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((award: any) => {
                 const realIdx = award._idx;
+                // Extract readable info
+                const summary = getAwardSummary(award);
+                const namedAwardees: string[] = [];
+                for (const k of ["mvp", "dpoy", "smoy", "mip", "roy", "finalsMvp"]) {
+                  if (award[k]) namedAwardees.push(`${TYPE_LABELS[k] || k}: ${renderAwardee(award[k])}`);
+                }
                 return (
                   <tr key={realIdx} className="border-t border-border hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => openEdit(realIdx)}>
                     <td className="p-3 text-muted-foreground">{award.season ?? "—"}</td>
                     <td className="p-3">
                       <span className="px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium">
-                        {typeof award === "object" ? (award.type || Object.keys(award).filter((k: string) => k !== "season" && !k.startsWith("_"))[0] || "—") : "—"}
+                        {award.type ? (TYPE_LABELS[award.type] || award.type) : (namedAwardees.length > 0 ? "Premios de temporada" : "—")}
                       </span>
                     </td>
-                    <td className="p-3 text-xs text-muted-foreground font-mono truncate max-w-[300px]">
-                      {JSON.stringify(award, (k, v) => k.startsWith("_") ? undefined : v).slice(0, 100)}
+                    <td className="p-3 text-xs text-muted-foreground max-w-[400px]">
+                      {namedAwardees.length > 0 ? (
+                        <div className="space-y-0.5">
+                          {namedAwardees.slice(0, 3).map((n, i) => <div key={i}>{n}</div>)}
+                          {namedAwardees.length > 3 && <div className="text-muted-foreground/50">+{namedAwardees.length - 3} más</div>}
+                        </div>
+                      ) : (
+                        <span>{summary}</span>
+                      )}
                     </td>
                     <td className="p-3 flex gap-1" onClick={e => e.stopPropagation()}>
                       <Button variant="ghost" size="icon" onClick={() => duplicateAward(realIdx)} className="h-7 w-7">
@@ -151,51 +282,10 @@ const AwardsEditor = () => {
         exportFileName="award.json"
       >
         {localAward && (
-          <div className="space-y-4">
-            {awardKeys.map(key => {
-              const val = localAward[key];
-              if (typeof val === "object" && val !== null) {
-                return (
-                  <div key={key}>
-                    <h4 className="text-xs font-display tracking-wider text-primary mb-2 uppercase">{key}</h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      {Object.keys(val).map(subKey => (
-                        <div key={subKey}>
-                          <label className="text-xs text-muted-foreground mb-1 block">{subKey}</label>
-                          <Input
-                            value={val[subKey] ?? ""}
-                            onChange={e => setLocalAward((prev: any) => ({
-                              ...prev,
-                              [key]: { ...prev[key], [subKey]: isNaN(Number(e.target.value)) || e.target.value === "" ? e.target.value : Number(e.target.value) }
-                            }))}
-                            className="bg-muted border-border"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              }
-              return (
-                <div key={key}>
-                  <label className="text-xs text-muted-foreground mb-1 block">{key}</label>
-                  <Input
-                    value={val ?? ""}
-                    onChange={e => setLocalAward((prev: any) => ({
-                      ...prev,
-                      [key]: isNaN(Number(e.target.value)) || e.target.value === "" ? e.target.value : Number(e.target.value)
-                    }))}
-                    className="bg-muted border-border"
-                  />
-                </div>
-              );
-            })}
-            <div>
-              <h4 className="text-xs font-display tracking-wider text-primary mb-3 uppercase">JSON completo</h4>
-              <pre className="text-[10px] bg-muted rounded-lg p-3 overflow-auto max-h-48 text-muted-foreground">
-                {JSON.stringify(localAward, null, 2)}
-              </pre>
-            </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {Object.entries(localAward)
+              .filter(([k]) => !k.startsWith("_"))
+              .map(([key, val]) => renderAwardField(key, val))}
           </div>
         )}
       </EditSheet>
