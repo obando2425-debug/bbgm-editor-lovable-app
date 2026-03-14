@@ -79,7 +79,7 @@ Responde siempre en español. Sé conciso pero informativo.`;
           ...messages,
         ],
         stream: true,
-        max_tokens: 16000,
+        max_tokens: 32000,
       }),
     });
 
