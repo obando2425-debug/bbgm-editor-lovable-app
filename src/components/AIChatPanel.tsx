@@ -292,6 +292,7 @@ const AIChatPanel = ({ open, onClose }: { open: boolean; onClose: () => void }) 
         salaryCap: getAttr("salaryCap"),
         fileName,
         samplePlayers: league.players?.slice(0, 10).map(p => `${p.firstName} ${p.lastName} (tid:${p.tid}, ovr:${p.ratings?.[p.ratings.length-1]?.ovr})`),
+        ...(fileContext ? { attachedFileSchema: { keys: Object.keys(fileContext), playerCount: (fileContext.players || []).length, teamCount: (fileContext.teams || []).length, samplePlayer: fileContext.players?.[0], sampleTeam: fileContext.teams?.[0] } } : {}),
       } : null;
 
       const resp = await fetch(CHAT_URL, {
