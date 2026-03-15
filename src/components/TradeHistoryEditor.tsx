@@ -41,12 +41,8 @@ const TradeHistoryEditor = () => {
     toast.success("Evento duplicado");
   };
 
-  const teamPlayersForTrade = (tid: number) => players.filter((p: any) => p.tid === tid);
-  const teamObj = (tid: number) => teams.find((t: any) => t.tid === tid) as any;
-  const teamLabel = (tid: number) => {
-    const t = teamObj(tid);
-    return t ? t.abbrev : `T${tid}`;
-  };
+  const teamPlayers = (tid: number) => players.filter((p: any) => p.tid === tid);
+  const teamName = (tid: number) => teams.find((t: any) => t.tid === tid);
 
   const executeTrade = () => {
     if (team1Players.length === 0 && team2Players.length === 0) {
@@ -54,20 +50,21 @@ const TradeHistoryEditor = () => {
       return;
     }
     const updated = [...players];
-    team1Players.forEach(pIdx => { updated[pIdx] = { ...updated[pIdx], tid: team2Tid }; });
-    team2Players.forEach(pIdx => { updated[pIdx] = { ...updated[pIdx], tid: team1Tid }; });
+    team1Players.forEach(pIdx => {
+      updated[pIdx] = { ...updated[pIdx], tid: team2Tid };
+    });
+    team2Players.forEach(pIdx => {
+      updated[pIdx] = { ...updated[pIdx], tid: team1Tid };
+    });
     updatePlayers(updated);
 
-    const t1 = teamObj(team1Tid);
-    const t2 = teamObj(team2Tid);
+    // Add trade event
+    const t1 = teamName(team1Tid);
+    const t2 = teamName(team2Tid);
     const t1Names = team1Players.map(i => `${players[i]?.firstName} ${players[i]?.lastName}`).join(", ");
     const t2Names = team2Players.map(i => `${players[i]?.firstName} ${players[i]?.lastName}`).join(", ");
     const tradeText = `${t1?.abbrev || team1Tid} traded ${t1Names || "nothing"} to ${t2?.abbrev || team2Tid} for ${t2Names || "nothing"}`;
-    const season = (() => {
-      const ga = league?.gameAttributes;
-      if (Array.isArray(ga)) return (ga as any[]).find((a: any) => a.key === "season")?.value || 2025;
-      return (ga as any)?.season || 2025;
-    })();
+    const season = (league?.gameAttributes as any)?.season || 2025;
     updateSection("events", [...events, { type: "trade", text: tradeText, season, tids: [team1Tid, team2Tid] }]);
 
     setTeam1Players([]);
@@ -79,86 +76,6 @@ const TradeHistoryEditor = () => {
   const togglePlayer = (pIdx: number, side: 1 | 2) => {
     const setter = side === 1 ? setTeam1Players : setTeam2Players;
     setter(prev => prev.includes(pIdx) ? prev.filter(i => i !== pIdx) : [...prev, pIdx]);
-  };
-
-  // Render trade detail in a readable way
-  const renderTradeDetail = (trade: any) => {
-    if (!trade) return null;
-    const fields = Object.entries(trade).filter(([k]) => !k.startsWith("_"));
-    return (
-      <div className="space-y-4">
-        {/* Main info */}
-        <div className="grid grid-cols-2 gap-3">
-          {trade.season !== undefined && (
-            <div>
-              <label className="text-xs text-muted-foreground block mb-0.5">Temporada</label>
-              <div className="text-sm font-medium text-foreground">{trade.season}</div>
-            </div>
-          )}
-          {trade.type && (
-            <div>
-              <label className="text-xs text-muted-foreground block mb-0.5">Tipo</label>
-              <span className="px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium">{trade.type}</span>
-            </div>
-          )}
-          {trade.phase !== undefined && (
-            <div>
-              <label className="text-xs text-muted-foreground block mb-0.5">Fase</label>
-              <div className="text-sm text-foreground">{trade.phase}</div>
-            </div>
-          )}
-        </div>
-
-        {/* Text description */}
-        {trade.text && (
-          <div>
-            <label className="text-xs text-muted-foreground block mb-1">Descripción</label>
-            <div className="text-sm text-foreground bg-muted rounded-lg p-3">{trade.text}</div>
-          </div>
-        )}
-
-        {/* Teams involved */}
-        {trade.tids && Array.isArray(trade.tids) && (
-          <div>
-            <label className="text-xs text-muted-foreground block mb-1">Equipos involucrados</label>
-            <div className="flex gap-2">
-              {trade.tids.map((tid: number, i: number) => (
-                <span key={i} className="px-2 py-1 rounded bg-primary/10 text-primary text-xs font-medium">
-                  {teamLabel(tid)}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* PIDs involved */}
-        {trade.pids && Array.isArray(trade.pids) && (
-          <div>
-            <label className="text-xs text-muted-foreground block mb-1">Jugadores involucrados</label>
-            <div className="space-y-1">
-              {trade.pids.flat().map((pid: number, i: number) => {
-                const p = players.find((pl: any) => pl.pid === pid);
-                return (
-                  <div key={i} className="text-xs bg-muted rounded p-2">
-                    {p ? `${p.firstName} ${p.lastName} (${teamLabel(p.tid)})` : `PID ${pid}`}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Other fields */}
-        {fields.filter(([k]) => !["season", "type", "text", "tids", "pids", "phase"].includes(k)).map(([key, val]) => (
-          <div key={key}>
-            <label className="text-xs text-muted-foreground block mb-0.5">{key}</label>
-            <div className="text-xs text-foreground bg-muted rounded p-2 max-h-24 overflow-y-auto">
-              {typeof val === "object" ? JSON.stringify(val, null, 2) : String(val)}
-            </div>
-          </div>
-        ))}
-      </div>
-    );
   };
 
   return (
@@ -187,15 +104,11 @@ const TradeHistoryEditor = () => {
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary font-medium">
-                    Temporada {trade.season ?? "—"}
+                    Season {trade.season ?? "—"}
                   </span>
-                  {trade.tids && Array.isArray(trade.tids) && (
-                    <span className="text-xs text-muted-foreground">
-                      {trade.tids.map((tid: number) => teamLabel(tid)).join(" ↔ ")}
-                    </span>
-                  )}
+                  <span className="text-xs text-muted-foreground">{trade.type}</span>
                 </div>
-                <p className="text-sm text-foreground">{trade.text || "Trade sin descripción"}</p>
+                <p className="text-sm text-foreground">{trade.text || JSON.stringify(trade).slice(0, 150)}</p>
               </div>
               <div className="flex gap-1 ml-2 shrink-0" onClick={e => e.stopPropagation()}>
                 <Button variant="ghost" size="icon" onClick={() => duplicateTrade(trade._idx)} className="h-7 w-7">
@@ -218,7 +131,11 @@ const TradeHistoryEditor = () => {
         onExportJson={() => editingTrade}
         exportFileName="trade.json"
       >
-        {renderTradeDetail(editingTrade)}
+        {editingTrade && (
+          <pre className="text-xs bg-muted rounded-lg p-4 overflow-auto text-muted-foreground">
+            {JSON.stringify(editingTrade, (k, v) => k.startsWith("_") ? undefined : v, 2)}
+          </pre>
+        )}
       </EditSheet>
 
       {/* Trade Creator Sheet */}
@@ -237,12 +154,12 @@ const TradeHistoryEditor = () => {
                 {teams.map((t: any) => <option key={t.tid} value={t.tid}>{t.abbrev} — {t.region} {t.name}</option>)}
               </select>
               <div className="space-y-1 max-h-48 overflow-y-auto">
-                {teamPlayersForTrade(team1Tid).map((p: any) => {
+                {teamPlayers(team1Tid).map((p: any) => {
                   const pIdx = players.indexOf(p);
                   const selected = team1Players.includes(pIdx);
                   return (
                     <div key={pIdx} onClick={() => togglePlayer(pIdx, 1)} className={`p-2 rounded text-xs cursor-pointer transition-colors ${selected ? "bg-primary/20 text-primary" : "bg-muted hover:bg-muted/80"}`}>
-                      {p.firstName} {p.lastName} <span className="text-muted-foreground">({p.pos} · {teamLabel(p.tid)})</span>
+                      {p.firstName} {p.lastName} <span className="text-muted-foreground">({p.pos})</span>
                     </div>
                   );
                 })}
@@ -255,12 +172,12 @@ const TradeHistoryEditor = () => {
                 {teams.map((t: any) => <option key={t.tid} value={t.tid}>{t.abbrev} — {t.region} {t.name}</option>)}
               </select>
               <div className="space-y-1 max-h-48 overflow-y-auto">
-                {teamPlayersForTrade(team2Tid).map((p: any) => {
+                {teamPlayers(team2Tid).map((p: any) => {
                   const pIdx = players.indexOf(p);
                   const selected = team2Players.includes(pIdx);
                   return (
                     <div key={pIdx} onClick={() => togglePlayer(pIdx, 2)} className={`p-2 rounded text-xs cursor-pointer transition-colors ${selected ? "bg-primary/20 text-primary" : "bg-muted hover:bg-muted/80"}`}>
-                      {p.firstName} {p.lastName} <span className="text-muted-foreground">({p.pos} · {teamLabel(p.tid)})</span>
+                      {p.firstName} {p.lastName} <span className="text-muted-foreground">({p.pos})</span>
                     </div>
                   );
                 })}
@@ -268,13 +185,14 @@ const TradeHistoryEditor = () => {
             </div>
           </div>
 
+          {/* Summary */}
           <div className="bg-card border border-border rounded-lg p-3">
             <h4 className="text-xs font-display tracking-wider text-primary mb-2">RESUMEN</h4>
             <div className="text-sm">
-              <span className="font-medium">{teamLabel(team1Tid)}</span> envía: {team1Players.map(i => `${players[i]?.firstName} ${players[i]?.lastName}`).join(", ") || "nada"}
+              <span className="font-medium">{teamName(team1Tid)?.abbrev}</span> envía: {team1Players.map(i => `${players[i]?.firstName} ${players[i]?.lastName}`).join(", ") || "nada"}
             </div>
             <div className="text-sm mt-1">
-              <span className="font-medium">{teamLabel(team2Tid)}</span> envía: {team2Players.map(i => `${players[i]?.firstName} ${players[i]?.lastName}`).join(", ") || "nada"}
+              <span className="font-medium">{teamName(team2Tid)?.abbrev}</span> envía: {team2Players.map(i => `${players[i]?.firstName} ${players[i]?.lastName}`).join(", ") || "nada"}
             </div>
           </div>
 

@@ -34,13 +34,13 @@ TIPOS DE ACCIÓN:
 - update_game_attributes: Actualiza configuración. JSON = {clave: valor}
 
 PROCESAMIENTO POR LOTES OBLIGATORIO:
-- Para tareas grandes, divide en bloques de batch_create_players (hasta 30 por bloque) o batch_create_teams (hasta 15 por bloque)
-- CADA jugador/equipo DEBE tener valores ÚNICOS y VARIADOS en ratings, salarios y atributos — NUNCA repetir los mismos números
-- Para ratings: varía cada atributo al menos ±10 puntos entre jugadores. Usa rangos amplios (40-95 para OVR)
-- Para contratos: calcula salario coherente con OVR (bajo OVR = $750-5000, alto OVR = $15000-35000)
-- Incluye TODOS los bloques necesarios en UNA SOLA respuesta sin esperar confirmación
-- Al final, confirma el conteo REAL: "Total creados: X jugadores"
-- NO hay límite de creación — si el usuario pide 100 jugadores, genera los 100
+- Para tareas grandes (>15 jugadores o >10 equipos), DEBES dividir en bloques
+- Máximo 15 jugadores o 10 equipos por bloque de acción batch_create_players
+- Para cada bloque, incluye un mensaje de progreso ANTES del bloque: "Creando jugadores... bloque X/Y (N/Total)"
+- Si el usuario pide 100 jugadores, calcula: necesitas ceil(100/15) = 7 bloques
+- INCLUYE TODOS los bloques necesarios en UNA SOLA respuesta - no esperes confirmación
+- Al final, confirma el conteo REAL: "Total creados: X jugadores. Verificación: el JSON ahora tiene Y jugadores en total."
+- Si la liga tiene menos de 30 equipos y el usuario pide crear jugadores para equipos que no existen, AVISA antes de proceder
 
 VERIFICACIÓN DE EQUIPOS:
 - Antes de asignar jugadores a equipos, verifica que el TID existe en la liga
@@ -79,7 +79,7 @@ Responde siempre en español. Sé conciso pero informativo.`;
           ...messages,
         ],
         stream: true,
-        max_tokens: 32000,
+        max_tokens: 16000,
       }),
     });
 

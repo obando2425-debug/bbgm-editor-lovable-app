@@ -1,88 +1,101 @@
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import { useLeague } from "@/context/LeagueContext";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
-// Spanish labels for known gameAttributes keys
-const KEY_LABELS: Record<string, string> = {
-  leagueName: "Nombre de Liga", season: "Temporada", startingSeason: "Temporada Inicial",
-  phase: "Fase", nextPhase: "Siguiente Fase", gameOver: "Game Over", godMode: "God Mode",
-  godModeInPast: "God Mode en Pasado", otherTeamsWantToHire: "Otros equipos quieren contratarte",
-  numGames: "Juegos por Temporada", numGamesPlayoffSeries: "Juegos por Serie Playoff",
-  numPlayoffByes: "Byes en Playoffs", numPlayoffRounds: "Rondas de Playoff",
-  quarterLength: "Duración de Cuarto (min)", numPeriods: "Períodos", pace: "Ritmo de Juego",
-  threePointers: "Triples", foulsNeededToFoulOut: "Faltas para Eliminación",
-  foulsUntilBonus: "Faltas hasta Bonus", numActiveTeams: "Equipos Activos",
-  numTeams: "Total de Equipos", equalizeRegions: "Ecualizar Regiones",
-  stopOnInjury: "Detener por Lesión", stopOnInjuryGames: "Juegos de Lesión para Detener",
-  aiTradesFactor: "Factor Trades IA", aiJerseyRetirement: "Retiro de Jersey IA",
-  maxRosterSize: "Máximo Roster", minRosterSize: "Mínimo Roster",
-  numDraftRounds: "Rondas de Draft", draftType: "Tipo de Draft",
-  playersRefuseToNegotiate: "Jugadores Rechazan Negociar",
-  rookieContractLengths: "Duración Contrato Novato", tragicDeathRate: "Tasa de Muerte Trágica",
-  brotherRate: "Tasa de Hermanos", sonRate: "Tasa de Hijos", injuryRate: "Tasa de Lesiones",
-  hardCap: "Hard Cap", salaryCap: "Tope Salarial ($K)", minPayroll: "Nómina Mínima ($K)",
-  luxuryPayroll: "Impuesto de Lujo ($K)", luxuryTax: "Tasa Impuesto de Lujo",
-  minContract: "Contrato Mínimo ($K)", maxContract: "Contrato Máximo ($K)",
-  budget: "Budget habilitado", difficulty: "Dificultad (-1 a 1)", lid: "League ID",
-  userTid: "Equipo del Usuario (TID)", userTids: "TIDs del Usuario",
-  autoDeleteOldBoxScores: "Borrar Box Scores Antiguos", hofFactor: "Factor Hall of Fame",
-  allStarGame: "All-Star Game", challengeNoDraftPicks: "Reto: Sin Draft Picks",
-  challengeNoFreeAgents: "Reto: Sin Free Agents", challengeNoRatings: "Reto: Sin Ratings",
-  challengeNoTrades: "Reto: Sin Trades", challengeLoseBestPlayer: "Reto: Pierde Mejor Jugador",
-  challengeFiredLuxuryTax: "Reto: Despedido Luxury Tax",
-  challengeFiredMissPlayoffs: "Reto: Despedido Sin Playoffs",
-  repeatSeason: "Repetir Temporada", ties: "Empates Permitidos", otl: "Overtime Loss",
-  spectator: "Espectador", tradeDeadline: "Deadline de Trades",
-  autoRelocate: "Reubicación automática", playoffsByConf: "Playoffs por Conferencia",
-  playIn: "Play-In Tournament", numPlayersDunk: "Jugadores en Concurso de Mates",
-  numPlayersThree: "Jugadores en Concurso de Triples", realStats: "Stats Reales",
-  realDraftRatings: "Ratings de Draft Reales", homeCourtAdvantage: "Ventaja de Local",
-  rookiesCanRefuse: "Novatos Pueden Rechazar", forceRetireAge: "Edad Retiro Forzado",
-  forceRetireSeasons: "Temporadas Retiro Forzado", salaryCapType: "Tipo de Tope Salarial",
-  numSeasonsFutureDraftPicks: "Temporadas Futuras de Draft Picks",
-  draftAges: "Edades de Draft", draftPickAutoContract: "Contrato Automático Draft Pick",
-  inflationAvg: "Inflación Promedio", inflationMax: "Inflación Máxima",
-  inflationMin: "Inflación Mínima", inflationStd: "Desviación Inflación",
-  elam: "Regla Elam", elamASG: "Elam en All-Star", elamPoints: "Puntos Elam",
-  pointsFormula: "Fórmula de Puntos", realPlayerDeterminism: "Determinismo Jugadores Reales",
-  tradeAbovePayrollTax: "Tradear Sobre Impuesto Nómina",
-  confs: "Conferencias", divs: "Divisiones",
-};
-
-const CATEGORIES: { name: string; keys: string[] }[] = [
+const CATEGORIES: { name: string; fields: { key: string; label: string; type: "text" | "number" | "boolean" | "select"; options?: string[] }[] }[] = [
   {
     name: "Liga",
-    keys: ["leagueName", "season", "startingSeason", "phase", "nextPhase", "gameOver", "godMode", "godModeInPast", "otherTeamsWantToHire", "lid"],
+    fields: [
+      { key: "leagueName", label: "Nombre de Liga", type: "text" },
+      { key: "season", label: "Temporada", type: "number" },
+      { key: "startingSeason", label: "Temporada Inicial", type: "number" },
+      { key: "phase", label: "Fase", type: "number" },
+      { key: "nextPhase", label: "Siguiente Fase", type: "number" },
+      { key: "gameOver", label: "Game Over", type: "boolean" },
+      { key: "godMode", label: "God Mode", type: "boolean" },
+      { key: "godModeInPast", label: "God Mode en Pasado", type: "boolean" },
+      { key: "otherTeamsWantToHire", label: "Otros equipos quieren contratarte", type: "boolean" },
+    ],
   },
   {
     name: "Juego",
-    keys: ["numGames", "numGamesPlayoffSeries", "numPlayoffByes", "numPlayoffRounds", "quarterLength", "numPeriods", "pace", "threePointers", "foulsNeededToFoulOut", "foulsUntilBonus", "elam", "elamASG", "elamPoints", "tradeDeadline"],
-  },
-  {
-    name: "Conferencias y Divisiones",
-    keys: ["confs", "divs"],
+    fields: [
+      { key: "numGames", label: "Juegos por Temporada", type: "number" },
+      { key: "numGamesPlayoffSeries", label: "Juegos por Serie Playoff", type: "text" },
+      { key: "numPlayoffByes", label: "Byes en Playoffs", type: "number" },
+      { key: "numPlayoffRounds", label: "Rondas de Playoff", type: "number" },
+      { key: "confs", label: "Conferencias (JSON)", type: "text" },
+      { key: "divs", label: "Divisiones (JSON)", type: "text" },
+      { key: "quarterLength", label: "Duración de Cuarto (min)", type: "number" },
+      { key: "numPeriods", label: "Períodos", type: "number" },
+      { key: "pace", label: "Ritmo de Juego", type: "number" },
+      { key: "threePointers", label: "Triples", type: "boolean" },
+      { key: "foulsNeededToFoulOut", label: "Faltas para Eliminación", type: "number" },
+      { key: "foulsUntilBonus", label: "Faltas hasta Bonus", type: "text" },
+    ],
   },
   {
     name: "Equipos",
-    keys: ["numActiveTeams", "numTeams", "equalizeRegions", "stopOnInjury", "stopOnInjuryGames", "aiTradesFactor", "aiJerseyRetirement", "autoRelocate"],
+    fields: [
+      { key: "numActiveTeams", label: "Equipos Activos", type: "number" },
+      { key: "numTeams", label: "Total de Equipos", type: "number" },
+      { key: "equalizeRegions", label: "Ecualizar Regiones", type: "boolean" },
+      { key: "stopOnInjury", label: "Detener por Lesión", type: "boolean" },
+      { key: "stopOnInjuryGames", label: "Juegos de Lesión para Detener", type: "number" },
+      { key: "aiTradesFactor", label: "Factor Trades IA", type: "number" },
+      { key: "aiJerseyRetirement", label: "Retiro de Jersey IA", type: "boolean" },
+    ],
   },
   {
     name: "Jugadores",
-    keys: ["maxRosterSize", "minRosterSize", "numDraftRounds", "draftType", "draftAges", "draftPickAutoContract", "playersRefuseToNegotiate", "rookieContractLengths", "rookiesCanRefuse", "tragicDeathRate", "brotherRate", "sonRate", "injuryRate", "hardCap", "forceRetireAge", "forceRetireSeasons"],
+    fields: [
+      { key: "maxRosterSize", label: "Máximo Roster", type: "number" },
+      { key: "minRosterSize", label: "Mínimo Roster", type: "number" },
+      { key: "numDraftRounds", label: "Rondas de Draft", type: "number" },
+      { key: "draftType", label: "Tipo de Draft", type: "text" },
+      { key: "playersRefuseToNegotiate", label: "Jugadores Rechazan Negociar", type: "boolean" },
+      { key: "rookieContractLengths", label: "Duración Contrato Novato", type: "text" },
+      { key: "tragicDeathRate", label: "Tasa de Muerte Trágica", type: "number" },
+      { key: "brotherRate", label: "Tasa de Hermanos", type: "number" },
+      { key: "sonRate", label: "Tasa de Hijos", type: "number" },
+      { key: "injuryRate", label: "Tasa de Lesiones", type: "number" },
+      { key: "hardCap", label: "Hard Cap", type: "boolean" },
+    ],
   },
   {
     name: "Finanzas",
-    keys: ["salaryCap", "minPayroll", "luxuryPayroll", "luxuryTax", "minContract", "maxContract", "salaryCapType", "budget"],
-  },
-  {
-    name: "Retos",
-    keys: ["challengeNoDraftPicks", "challengeNoFreeAgents", "challengeNoRatings", "challengeNoTrades", "challengeLoseBestPlayer", "challengeFiredLuxuryTax", "challengeFiredMissPlayoffs"],
+    fields: [
+      { key: "salaryCap", label: "Tope Salarial ($K)", type: "number" },
+      { key: "minPayroll", label: "Nómina Mínima ($K)", type: "number" },
+      { key: "luxuryPayroll", label: "Impuesto de Lujo ($K)", type: "number" },
+      { key: "luxuryTax", label: "Tasa Impuesto de Lujo", type: "number" },
+      { key: "minContract", label: "Contrato Mínimo ($K)", type: "number" },
+      { key: "maxContract", label: "Contrato Máximo ($K)", type: "number" },
+      { key: "budget", label: "Budget habilitado", type: "boolean" },
+    ],
   },
   {
     name: "Otros",
-    keys: ["difficulty", "userTid", "userTids", "autoDeleteOldBoxScores", "hofFactor", "allStarGame", "spectator", "playoffsByConf", "playIn", "numPlayersDunk", "numPlayersThree", "realStats", "realDraftRatings", "homeCourtAdvantage", "inflationAvg", "inflationMax", "inflationMin", "inflationStd", "numSeasonsFutureDraftPicks", "pointsFormula", "realPlayerDeterminism", "repeatSeason", "ties", "otl", "tradeAbovePayrollTax"],
+    fields: [
+      { key: "difficulty", label: "Dificultad (-1 a 1)", type: "number" },
+      { key: "lid", label: "League ID", type: "number" },
+      { key: "userTid", label: "Equipo del Usuario (TID)", type: "number" },
+      { key: "userTids", label: "TIDs del Usuario", type: "text" },
+      { key: "autoDeleteOldBoxScores", label: "Borrar Box Scores Antiguos", type: "boolean" },
+      { key: "hofFactor", label: "Factor Hall of Fame", type: "number" },
+      { key: "allStarGame", label: "All-Star Game", type: "text" },
+      { key: "challengeNoDraftPicks", label: "Reto: Sin Draft Picks", type: "boolean" },
+      { key: "challengeNoFreeAgents", label: "Reto: Sin Free Agents", type: "boolean" },
+      { key: "challengeNoRatings", label: "Reto: Sin Ratings", type: "boolean" },
+      { key: "challengeNoTrades", label: "Reto: Sin Trades", type: "boolean" },
+      { key: "challengeLoseBestPlayer", label: "Reto: Pierde Mejor Jugador", type: "boolean" },
+      { key: "challengeFiredLuxuryTax", label: "Reto: Despedido Luxury Tax", type: "boolean" },
+      { key: "challengeFiredMissPlayoffs", label: "Reto: Despedido Sin Playoffs", type: "boolean" },
+      { key: "repeatSeason", label: "Repetir Temporada", type: "text" },
+      { key: "ties", label: "Empates Permitidos", type: "boolean" },
+      { key: "otl", label: "Overtime Loss", type: "boolean" },
+    ],
   },
 ];
 
@@ -90,13 +103,12 @@ const GameAttributesEditor = () => {
   const { league, updateGameAttributes } = useLeague();
   const [openCats, setOpenCats] = useState<Set<string>>(new Set(["Liga", "Juego"]));
 
-  const attrs = league?.gameAttributes;
+  const attrs = league?.gameAttributes || {};
 
   const getAttrs = (): Record<string, any> => {
-    if (!attrs) return {};
     if (Array.isArray(attrs)) {
       const obj: Record<string, any> = {};
-      (attrs as any[]).forEach((item: any) => { if (item && item.key !== undefined) obj[item.key] = item.value; });
+      attrs.forEach((item: any) => { obj[item.key] = item.value; });
       return obj;
     }
     return attrs as Record<string, any>;
@@ -104,18 +116,20 @@ const GameAttributesEditor = () => {
 
   const setAttr = (key: string, value: any) => {
     if (Array.isArray(attrs)) {
-      const updated = [...(attrs as any[])];
-      const idx = updated.findIndex((a: any) => a.key === key);
-      if (idx !== -1) updated[idx] = { ...updated[idx], value };
-      else updated.push({ key, value });
+      const updated = (attrs as any[]).map((item: any) =>
+        item.key === key ? { ...item, value } : item
+      );
+      if (!updated.find((item: any) => item.key === key)) {
+        updated.push({ key, value });
+      }
       updateGameAttributes(updated as any);
     } else {
-      updateGameAttributes({ ...(attrs || {}), [key]: value } as any);
+      updateGameAttributes({ ...attrs, [key]: value });
     }
   };
 
   const attrObj = getAttrs();
-  const allCatKeys = new Set(CATEGORIES.flatMap(c => c.keys));
+  const allKnownKeys = new Set(CATEGORIES.flatMap(c => c.fields.map(f => f.key)));
 
   const toggleCat = (name: string) => {
     setOpenCats(prev => {
@@ -125,92 +139,11 @@ const GameAttributesEditor = () => {
     });
   };
 
-  // Unknown keys not in categories
-  const unknownKeys = Object.keys(attrObj).filter(k => !allCatKeys.has(k));
+  // Unrecognized keys that aren't in categories
+  const unknownKeys = Object.keys(attrObj).filter(k => !allKnownKeys.has(k));
 
-  const renderConfsEditor = () => {
-    const confs = attrObj.confs;
-    if (!Array.isArray(confs)) return <p className="text-xs text-muted-foreground">Sin conferencias definidas</p>;
-    return (
-      <div className="space-y-2">
-        <label className="text-xs text-muted-foreground mb-1 block">Conferencias</label>
-        {confs.map((conf: any, i: number) => (
-          <div key={i} className="flex items-center gap-2">
-            <Input
-              value={conf.name || ""}
-              onChange={e => {
-                const updated = [...confs];
-                updated[i] = { ...updated[i], name: e.target.value };
-                setAttr("confs", updated);
-              }}
-              className="bg-muted border-border flex-1"
-              placeholder="Nombre"
-            />
-            <span className="text-xs text-muted-foreground">CID: {conf.cid}</span>
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setAttr("confs", confs.filter((_: any, j: number) => j !== i))}>
-              <Trash2 className="w-3 h-3" />
-            </Button>
-          </div>
-        ))}
-        <Button variant="outline" size="sm" onClick={() => setAttr("confs", [...confs, { cid: confs.length, name: "Nueva Conferencia" }])} className="gap-1 text-xs">
-          <Plus className="w-3 h-3" /> Añadir Conferencia
-        </Button>
-      </div>
-    );
-  };
-
-  const renderDivsEditor = () => {
-    const divs = attrObj.divs;
-    const confs = attrObj.confs || [];
-    if (!Array.isArray(divs)) return <p className="text-xs text-muted-foreground">Sin divisiones definidas</p>;
-    return (
-      <div className="space-y-2">
-        <label className="text-xs text-muted-foreground mb-1 block">Divisiones</label>
-        {divs.map((div: any, i: number) => (
-          <div key={i} className="flex items-center gap-2">
-            <Input
-              value={div.name || ""}
-              onChange={e => {
-                const updated = [...divs];
-                updated[i] = { ...updated[i], name: e.target.value };
-                setAttr("divs", updated);
-              }}
-              className="bg-muted border-border flex-1"
-              placeholder="Nombre"
-            />
-            <select
-              value={div.cid ?? 0}
-              onChange={e => {
-                const updated = [...divs];
-                updated[i] = { ...updated[i], cid: parseInt(e.target.value) };
-                setAttr("divs", updated);
-              }}
-              className="bg-muted border border-border rounded-md px-2 py-1.5 text-xs text-foreground"
-            >
-              {Array.isArray(confs) ? confs.map((c: any) => (
-                <option key={c.cid} value={c.cid}>{c.name || `Conf ${c.cid}`}</option>
-              )) : <option value={0}>Conf 0</option>}
-            </select>
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setAttr("divs", divs.filter((_: any, j: number) => j !== i))}>
-              <Trash2 className="w-3 h-3" />
-            </Button>
-          </div>
-        ))}
-        <Button variant="outline" size="sm" onClick={() => setAttr("divs", [...divs, { did: divs.length, cid: 0, name: "Nueva División" }])} className="gap-1 text-xs">
-          <Plus className="w-3 h-3" /> Añadir División
-        </Button>
-      </div>
-    );
-  };
-
-  const renderField = (key: string, value: any) => {
-    const label = KEY_LABELS[key] || key;
-    
-    // Special handlers for confs and divs
-    if (key === "confs") return <div key={key} className="col-span-full">{renderConfsEditor()}</div>;
-    if (key === "divs") return <div key={key} className="col-span-full">{renderDivsEditor()}</div>;
-
-    if (typeof value === "boolean") {
+  const renderField = (key: string, label: string, type: string, value: any) => {
+    if (type === "boolean") {
       return (
         <div key={key} className="bg-card rounded-lg p-3 border border-border flex items-center justify-between">
           <label className="text-xs text-muted-foreground">{label}</label>
@@ -235,9 +168,9 @@ const GameAttributesEditor = () => {
           />
         ) : (
           <Input
-            type={typeof value === "number" ? "number" : "text"}
+            type={type === "number" ? "number" : "text"}
             value={value ?? ""}
-            onChange={e => setAttr(key, typeof value === "number" ? parseFloat(e.target.value) || 0 : e.target.value)}
+            onChange={e => setAttr(key, type === "number" ? parseFloat(e.target.value) || 0 : e.target.value)}
             className="bg-muted border-border"
           />
         )}
@@ -249,8 +182,7 @@ const GameAttributesEditor = () => {
     <div className="animate-fade-in space-y-3">
       {CATEGORIES.map(cat => {
         const isOpen = openCats.has(cat.name);
-        // Count fields that exist in the data
-        const existingKeys = cat.keys.filter(k => attrObj[k] !== undefined);
+        const fieldsWithValues = cat.fields.filter(f => attrObj[f.key] !== undefined);
         return (
           <div key={cat.name} className="border border-border rounded-lg overflow-hidden">
             <button
@@ -259,13 +191,13 @@ const GameAttributesEditor = () => {
             >
               <span className="font-display text-sm tracking-wider text-primary uppercase">{cat.name}</span>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-muted-foreground">{existingKeys.length}/{cat.keys.length} campos</span>
+                <span className="text-[10px] text-muted-foreground">{fieldsWithValues.length} campos</span>
                 {isOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
               </div>
             </button>
             {isOpen && (
               <div className="p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {cat.keys.map(key => renderField(key, attrObj[key]))}
+                {cat.fields.map(f => renderField(f.key, f.label, f.type, attrObj[f.key]))}
               </div>
             )}
           </div>
@@ -286,7 +218,11 @@ const GameAttributesEditor = () => {
           </button>
           {openCats.has("_unknown") && (
             <div className="p-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-              {unknownKeys.map(key => renderField(key, attrObj[key]))}
+              {unknownKeys.map(key => {
+                const val = attrObj[key];
+                const isSimple = typeof val !== "object" || val === null;
+                return renderField(key, key, isSimple ? (typeof val === "number" ? "number" : "text") : "text", val);
+              })}
             </div>
           )}
         </div>

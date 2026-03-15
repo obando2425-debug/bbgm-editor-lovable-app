@@ -8,10 +8,9 @@ import { toast } from "sonner";
 import EditSheet from "@/components/EditSheet";
 import { TEAM_FIELDS } from "@/lib/bbgm-schema";
 import { addNotification } from "@/lib/bbgm-notifications";
-import { propagateTeamDeletion } from "@/lib/bbgm-propagation";
 
 const TeamsEditor = () => {
-  const { league, updateTeams, updatePlayers, updateDraftPicks, addChange } = useLeague();
+  const { league, updateTeams, updatePlayers } = useLeague();
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [rosterTid, setRosterTid] = useState<number | null>(null);
   const [search, setSearch] = useState("");
@@ -22,6 +21,7 @@ const TeamsEditor = () => {
   const teams = league?.teams || [];
   const players = league?.players || [];
 
+  // Listen for global search navigation
   React.useEffect(() => {
     const handler = (e: Event) => {
       const idx = (e as CustomEvent).detail?.index;
@@ -73,17 +73,22 @@ const TeamsEditor = () => {
   };
 
   const deleteTeam = (idx: number) => {
-    if (!league) return;
     const team = teams[idx];
-    const result = propagateTeamDeletion(league, team.tid);
-
-    if (result.playersChanged && result.players) updatePlayers(result.players);
-    if (result.draftPicksChanged && result.draftPicks) updateDraftPicks(result.draftPicks);
-
-    addChange("teams", `Equipo eliminado: ${team.region} ${team.name}`, team, null, "eliminación");
-
+    // Propagation: move players to free agents
+    const affectedPlayers = players.filter(p => p.tid === team.tid);
+    if (affectedPlayers.length > 0) {
+      const updatedPlayers = players.map(p => p.tid === team.tid ? { ...p, tid: -1 } : p);
+      updatePlayers(updatedPlayers);
+      addNotification({
+        type: "warning",
+        title: `Equipo ${team.region} ${team.name} eliminado`,
+        message: `${affectedPlayers.length} jugadores movidos a Free Agents: ${affectedPlayers.slice(0, 5).map(p => `${p.firstName} ${p.lastName}`).join(", ")}`,
+        section: "teams",
+      });
+      toast.warning(`${affectedPlayers.length} jugadores movidos a Free Agents`);
+    }
     updateTeams(teams.filter((_, i) => i !== idx));
-    toast.success(`Equipo eliminado — ${result.affectedPlayerNames.length} jugadores a Free Agents`);
+    toast.success("Equipo eliminado");
   };
 
   const duplicateTeam = (idx: number) => {
@@ -133,6 +138,7 @@ const TeamsEditor = () => {
     </button>
   );
 
+  // Custom fields
   const knownKeys = new Set([
     ...TEAM_FIELDS.basic.map(f => f.key),
     ...TEAM_FIELDS.advanced.map(f => f.key),
@@ -228,18 +234,6 @@ const TeamsEditor = () => {
                     )}
                   </div>
                 ))}
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">URL Imagen</label>
-                  <Input value={localTeam.imgURL || ""} onChange={e => updateField("imgURL", e.target.value)} placeholder="https://..." className="bg-muted border-border" />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Estrategia</label>
-                  <select value={localTeam.strategy || ""} onChange={e => updateField("strategy", e.target.value)} className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground">
-                    <option value="">Sin definir</option>
-                    <option value="contending">Competir</option>
-                    <option value="rebuilding">Reconstruir</option>
-                  </select>
-                </div>
                 <div className="col-span-2">
                   <label className="text-xs text-muted-foreground mb-1 block">Colores (separados por coma)</label>
                   <Input value={(localTeam.colors || []).join(", ")} onChange={e => updateField("colors", e.target.value.split(",").map((c: string) => c.trim()))} className="bg-muted border-border" />
@@ -282,56 +276,7 @@ const TeamsEditor = () => {
               </div>
             )}
 
-            {/* Seasons history */}
-            {localTeam.seasons && Array.isArray(localTeam.seasons) && localTeam.seasons.length > 0 && (
-              <>
-                <SectionHeader id="seasons" title={`Historial Temporadas (${localTeam.seasons.length})`} />
-                {openSections.has("seasons") && (
-                  <div className="max-h-48 overflow-y-auto scrollbar-thin">
-                    <table className="w-full text-[10px]">
-                      <thead><tr className="text-muted-foreground"><th className="text-left p-1">Temp</th><th className="text-right p-1">W</th><th className="text-right p-1">L</th><th className="text-right p-1">Revenue</th><th className="text-right p-1">Payroll</th></tr></thead>
-                      <tbody>
-                        {localTeam.seasons.map((s: any, i: number) => (
-                          <tr key={i} className="border-t border-border">
-                            <td className="p-1">{s.season}</td>
-                            <td className="p-1 text-right text-green-400">{s.won}</td>
-                            <td className="p-1 text-right text-destructive">{s.lost}</td>
-                            <td className="p-1 text-right">${((s.revenues?.totalRevenues?.amount || 0) / 1000).toFixed(0)}M</td>
-                            <td className="p-1 text-right">${((s.expenses?.salary?.amount || 0) / 1000).toFixed(0)}M</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* Stats */}
-            {localTeam.stats && Array.isArray(localTeam.stats) && localTeam.stats.length > 0 && (
-              <>
-                <SectionHeader id="stats" title={`Estadísticas (${localTeam.stats.length})`} />
-                {openSections.has("stats") && (
-                  <div className="max-h-48 overflow-y-auto scrollbar-thin">
-                    <table className="w-full text-[10px]">
-                      <thead><tr className="text-muted-foreground"><th className="text-left p-1">Temp</th><th className="text-right p-1">GP</th><th className="text-right p-1">PTS</th><th className="text-right p-1">OPP</th><th className="text-right p-1">PO</th></tr></thead>
-                      <tbody>
-                        {localTeam.stats.map((s: any, i: number) => (
-                          <tr key={i} className="border-t border-border">
-                            <td className="p-1">{s.season}</td>
-                            <td className="p-1 text-right">{s.gp}</td>
-                            <td className="p-1 text-right">{(s.pts || 0).toFixed(1)}</td>
-                            <td className="p-1 text-right">{(s.oppPts || 0).toFixed(1)}</td>
-                            <td className="p-1 text-right">{s.playoffs ? "✓" : ""}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </>
-            )}
-
+            {/* Custom fields */}
             {customFields.length > 0 && (
               <>
                 <SectionHeader id="custom" title={`Campos personalizados (${customFields.length})`} />

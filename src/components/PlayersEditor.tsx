@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef } from "react";
 import { useLeague } from "@/context/LeagueContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Trash2, Copy, GripVertical, ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { Search, Trash2, Copy, GripVertical, ChevronDown, ChevronRight } from "lucide-react";
 import type { BBGMPlayer } from "@/types/bbgm";
 import { toast } from "sonner";
 import EditSheet from "@/components/EditSheet";
@@ -11,22 +11,13 @@ import { addNotification } from "@/lib/bbgm-notifications";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 
-/** Compute age from born.year and current season */
-const getAge = (player: any, season?: number): number | null => {
-  if (player.age) return player.age;
-  if (player.born?.year && season) return season - player.born.year;
-  if (player.born?.year) return new Date().getFullYear() - player.born.year;
-  return null;
-};
-
-const SortableRow = ({ player, idx, teamName, openEdit, duplicatePlayer, deletePlayer, season }: any) => {
+const SortableRow = ({ player, idx, teamName, openEdit, duplicatePlayer, deletePlayer }: any) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: idx });
   const style = {
     transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
     transition, opacity: isDragging ? 0.5 : 1,
   };
   const lr = player.ratings?.[player.ratings.length - 1];
-  const age = getAge(player, season);
   return (
     <tr ref={setNodeRef} style={style} className="border-t border-border hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => openEdit(idx)}>
       <td className="p-2 w-8" {...attributes} {...listeners} onClick={e => e.stopPropagation()}>
@@ -35,7 +26,7 @@ const SortableRow = ({ player, idx, teamName, openEdit, duplicatePlayer, deleteP
       <td className="p-3 font-medium">{player.firstName} {player.lastName}</td>
       <td className="p-3 text-muted-foreground">{player.pos || "—"}</td>
       <td className="p-3"><span className="px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium">{teamName(player.tid ?? -1)}</span></td>
-      <td className="p-3 text-muted-foreground">{age ?? "—"}</td>
+      <td className="p-3 text-muted-foreground">{player.age ?? "—"}</td>
       <td className="p-3 font-medium">{lr?.ovr ?? "—"}</td>
       <td className="p-3 text-primary font-medium">{lr?.pot ?? "—"}</td>
       <td className="p-3 text-muted-foreground">{player.contract ? `$${((player.contract.amount ?? 0) / 1000).toFixed(1)}M` : "—"}</td>
@@ -60,13 +51,6 @@ const PlayersEditor = () => {
 
   const players = league?.players || [];
   const teams = league?.teams || [];
-
-  const getSeason = (): number => {
-    const ga = league?.gameAttributes;
-    if (Array.isArray(ga)) return (ga as any[]).find((a: any) => a.key === "season")?.value || new Date().getFullYear();
-    return (ga as any)?.season || new Date().getFullYear();
-  };
-  const currentSeason = getSeason();
 
   React.useEffect(() => {
     const handler = (e: Event) => {
@@ -95,7 +79,7 @@ const PlayersEditor = () => {
     if (tid === -2) return "Retired";
     if (tid === -3) return "HoF";
     const team = teams.find(t => t.tid === tid);
-    return team ? (team as any).abbrev || `${(team as any).region} ${(team as any).name}` : `T${tid}`;
+    return team ? `${team.region} ${team.name}` : `T${tid}`;
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -170,9 +154,9 @@ const PlayersEditor = () => {
   const addPlayer = () => {
     const newPlayer: BBGMPlayer = {
       firstName: "Nuevo", lastName: "Jugador", pos: "PG", tid: -1, age: 22,
-      hgt: 75, weight: 190, born: { year: currentSeason - 22, loc: "" },
+      hgt: 75, weight: 190, born: { year: 2004, loc: "" },
       ratings: [{ ovr: 50, pot: 60, hgt: 50, stre: 50, spd: 50, jmp: 50, endu: 50, ins: 50, dnk: 50, ft: 50, fg: 50, tp: 50, oiq: 50, diq: 50, drb: 50, pss: 50, reb: 50 }],
-      contract: { amount: 1000, exp: currentSeason + 2 },
+      contract: { amount: 1000, exp: 2025 },
       injury: { type: "Healthy", gamesRemaining: 0 },
     };
     const updated = [...players, newPlayer];
@@ -190,7 +174,6 @@ const PlayersEditor = () => {
   };
 
   const lastRating = localPlayer?.ratings?.[localPlayer.ratings.length - 1];
-  const playerAge = localPlayer ? getAge(localPlayer, currentSeason) : null;
 
   const toggleSection = (s: string) => {
     setOpenSections(prev => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; });
@@ -213,20 +196,6 @@ const PlayersEditor = () => {
   ]);
   const customFields = localPlayer ? Object.keys(localPlayer).filter(k => !knownKeys.has(k)) : [];
 
-  // Relatives helper
-  const addRelative = () => {
-    const relatives = [...(localPlayer.relatives || []), { type: "brother", pid: 0, name: "" }];
-    updateField("relatives", relatives);
-  };
-  const updateRelative = (idx: number, field: string, value: any) => {
-    const relatives = [...(localPlayer.relatives || [])];
-    relatives[idx] = { ...relatives[idx], [field]: value };
-    updateField("relatives", relatives);
-  };
-  const removeRelative = (idx: number) => {
-    updateField("relatives", (localPlayer.relatives || []).filter((_: any, i: number) => i !== idx));
-  };
-
   return (
     <div className="animate-fade-in">
       <div className="flex flex-wrap gap-3 mb-4">
@@ -238,7 +207,7 @@ const PlayersEditor = () => {
           <option value="">Todos los equipos</option>
           <option value="-1">Free Agents</option>
           <option value="-2">Retirados</option>
-          {teams.map(t => <option key={t.tid} value={t.tid}>{(t as any).abbrev}</option>)}
+          {teams.map(t => <option key={t.tid} value={t.tid}>{t.abbrev}</option>)}
         </select>
         <select value={posFilter} onChange={e => setPosFilter(e.target.value)} className="bg-card border border-border rounded-md px-3 py-2 text-sm text-foreground">
           <option value="">Todas las pos</option>
@@ -271,7 +240,7 @@ const PlayersEditor = () => {
               <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
                 <tbody>
                   {filtered.map(player => (
-                    <SortableRow key={player._idx} player={player} idx={player._idx} teamName={teamName} openEdit={openEdit} duplicatePlayer={duplicatePlayer} deletePlayer={deletePlayer} season={currentSeason} />
+                    <SortableRow key={player._idx} player={player} idx={player._idx} teamName={teamName} openEdit={openEdit} duplicatePlayer={duplicatePlayer} deletePlayer={deletePlayer} />
                   ))}
                 </tbody>
               </SortableContext>
@@ -298,31 +267,24 @@ const PlayersEditor = () => {
             <SectionHeader id="basic" title="Información básica" />
             {openSections.has("basic") && (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {PLAYER_FIELDS.basic.map(({ key, label, type, options }) => {
-                  // For age: compute from born.year if not directly set
-                  let displayValue = localPlayer[key];
-                  if (key === "age" && !displayValue && localPlayer.born?.year) {
-                    displayValue = currentSeason - localPlayer.born.year;
-                  }
-                  return (
-                    <div key={key}>
-                      <label className="text-xs text-muted-foreground mb-1 block">{label}</label>
-                      {type === "select" && options ? (
-                        <select value={localPlayer[key] ?? ""} onChange={e => updateField(key, e.target.value)} className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground">
-                          {options.map(o => <option key={o} value={o}>{o}</option>)}
-                        </select>
-                      ) : (
-                        <Input type={type} value={displayValue ?? ""} onChange={e => updateField(key, type === "number" ? parseInt(e.target.value) || 0 : e.target.value)} className="bg-muted border-border" />
-                      )}
-                    </div>
-                  );
-                })}
+                {PLAYER_FIELDS.basic.map(({ key, label, type, options }) => (
+                  <div key={key}>
+                    <label className="text-xs text-muted-foreground mb-1 block">{label}</label>
+                    {type === "select" && options ? (
+                      <select value={localPlayer[key] ?? ""} onChange={e => updateField(key, e.target.value)} className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground">
+                        {options.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    ) : (
+                      <Input type={type} value={localPlayer[key] ?? ""} onChange={e => updateField(key, type === "number" ? parseInt(e.target.value) || 0 : e.target.value)} className="bg-muted border-border" />
+                    )}
+                  </div>
+                ))}
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">Equipo</label>
                   <select value={localPlayer.tid ?? -1} onChange={e => updateField("tid", parseInt(e.target.value))} className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground">
                     <option value={-1}>Free Agent</option>
                     <option value={-2}>Retirado</option>
-                    {teams.map(t => <option key={t.tid} value={t.tid}>{(t as any).abbrev} — {(t as any).region} {(t as any).name}</option>)}
+                    {teams.map(t => <option key={t.tid} value={t.tid}>{t.abbrev} — {t.region} {t.name}</option>)}
                   </select>
                 </div>
               </div>
@@ -366,12 +328,6 @@ const PlayersEditor = () => {
                     <Input type={type} value={localPlayer.born?.[key] ?? ""} onChange={e => updateNestedField(`born.${key}`, type === "number" ? parseInt(e.target.value) || 0 : e.target.value)} className="bg-muted border-border" />
                   </div>
                 ))}
-                {playerAge !== null && (
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Edad calculada</label>
-                    <div className="bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground">{playerAge} años</div>
-                  </div>
-                )}
               </div>
             )}
 
@@ -420,21 +376,6 @@ const PlayersEditor = () => {
               </div>
             )}
 
-            {/* Awards */}
-            <SectionHeader id="awards" title={`Premios (${(localPlayer.awards || []).length})`} />
-            {openSections.has("awards") && (
-              <div className="max-h-32 overflow-y-auto scrollbar-thin space-y-1">
-                {(localPlayer.awards || []).map((a: any, i: number) => (
-                  <div key={i} className="flex gap-2 items-center text-xs bg-muted rounded p-2">
-                    <span className="text-muted-foreground w-12">{a.season}</span>
-                    <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px]">{a.type}</span>
-                    <span className="text-foreground flex-1">{a.name || a.team || "—"}</span>
-                  </div>
-                ))}
-                {(localPlayer.awards || []).length === 0 && <p className="text-xs text-muted-foreground">Sin premios</p>}
-              </div>
-            )}
-
             {/* Mood Traits */}
             <SectionHeader id="mood" title="Mood Traits" />
             {openSections.has("mood") && (
@@ -444,42 +385,12 @@ const PlayersEditor = () => {
               </div>
             )}
 
-            {/* Relatives - clean interface instead of raw JSON */}
-            <SectionHeader id="relatives" title={`Familiares (${(localPlayer.relatives || []).length})`} />
+            {/* Relatives */}
+            <SectionHeader id="relatives" title="Familiares" />
             {openSections.has("relatives") && (
-              <div className="space-y-2">
-                {(localPlayer.relatives || []).map((rel: any, i: number) => (
-                  <div key={i} className="flex items-center gap-2 bg-muted rounded-lg p-2">
-                    <select
-                      value={rel.type || "brother"}
-                      onChange={e => updateRelative(i, "type", e.target.value)}
-                      className="bg-card border border-border rounded-md px-2 py-1 text-xs text-foreground"
-                    >
-                      <option value="brother">Hermano</option>
-                      <option value="son">Hijo</option>
-                      <option value="father">Padre</option>
-                    </select>
-                    <Input
-                      value={rel.name || ""}
-                      onChange={e => updateRelative(i, "name", e.target.value)}
-                      placeholder="Nombre"
-                      className="bg-card border-border h-7 text-xs flex-1"
-                    />
-                    <Input
-                      type="number"
-                      value={rel.pid ?? ""}
-                      onChange={e => updateRelative(i, "pid", parseInt(e.target.value) || 0)}
-                      placeholder="PID"
-                      className="bg-card border-border h-7 text-xs w-20"
-                    />
-                    <Button variant="ghost" size="icon" onClick={() => removeRelative(i)} className="h-7 w-7 text-destructive shrink-0">
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
-                  </div>
-                ))}
-                <Button variant="outline" size="sm" onClick={addRelative} className="gap-1 text-xs">
-                  <Plus className="w-3 h-3" /> Añadir Familiar
-                </Button>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Relatives (JSON)</label>
+                <textarea value={JSON.stringify(localPlayer.relatives || [], null, 1)} onChange={e => { try { updateField("relatives", JSON.parse(e.target.value)); } catch {} }} className="w-full bg-muted border border-border rounded-md p-2 text-[10px] font-mono text-foreground h-16 resize-y" />
               </div>
             )}
 

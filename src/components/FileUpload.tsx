@@ -1,5 +1,5 @@
-import React, { useCallback, useState, useEffect } from "react";
-import { Upload, FileJson, AlertTriangle, CheckCircle2, FolderOpen } from "lucide-react";
+import React, { useCallback, useState } from "react";
+import { Upload, FileJson, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { useLeague } from "@/context/LeagueContext";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -7,7 +7,6 @@ import { mergeWithSchema, validateBBGMFile } from "@/lib/bbgm-merge";
 import { validateLeague } from "@/lib/bbgm-validator";
 import { addNotification } from "@/lib/bbgm-notifications";
 import { createSnapshot } from "@/lib/bbgm-snapshots";
-import { hasIndexedDBSession, loadFromIndexedDB, clearIndexedDB, restoreFromProjectFile, type ProjectSession } from "@/lib/bbgm-persistence";
 
 // Minimal demo league
 const DEMO_LEAGUE = {
@@ -44,18 +43,13 @@ const DEMO_LEAGUE = {
 };
 
 const FileUpload = () => {
-  const { setLeague, setFileName, league, addReferenceFile, setActiveTab } = useLeague();
+  const { setLeague, setFileName, league, addReferenceFile } = useLeague();
   const [multiMode, setMultiMode] = useState(false);
   const [mergeReport, setMergeReport] = useState<string[] | null>(null);
-  const [hasIDBSession, setHasIDBSession] = useState(false);
 
-  // Check IndexedDB on mount
-  useEffect(() => {
-    hasIndexedDBSession().then(has => setHasIDBSession(has));
-  }, []);
-
-  const processAndLoad = useCallback((data: any, fName: string) => {
+  const processAndLoad = useCallback((data: any, fileName: string) => {
     try {
+      // Step 0: Validate
       const validation = validateBBGMFile(data);
       if (!validation.valid) {
         toast.error(validation.error || "Archivo no válido");
@@ -63,113 +57,118 @@ const FileUpload = () => {
         return;
       }
 
-      // Merge with schema — always execute
+      // Step 1-3: Merge with schema
       let result: ReturnType<typeof mergeWithSchema>;
       try {
         result = mergeWithSchema(data);
       } catch (mergeErr) {
         console.error("Merge error:", mergeErr);
+        // Fallback: use data as-is without merge
         result = { data, completedFields: [], isValid: true };
-        toast.warning("Merge parcial — algunos campos no pudieron completarse");
+        toast.warning("Merge con esquema omitido — se cargó el archivo sin completar campos");
       }
-
+      
+      // Step 4: Report completed fields
       if (result.completedFields.length > 0) {
         const report = result.completedFields.slice(0, 20);
         setMergeReport(report);
         addNotification({
-          type: "info", title: "Merge completado",
-          message: `${result.completedFields.length} campos completados: ${report.slice(0, 5).join(", ")}${result.completedFields.length > 5 ? "..." : ""}`,
+          type: "info",
+          title: "Merge completado",
+          message: `${result.completedFields.length} campos completados automáticamente: ${report.slice(0, 5).join(", ")}${result.completedFields.length > 5 ? "..." : ""}`,
         });
         toast.success(`${result.completedFields.length} campos completados automáticamente`);
       }
 
+      // Validate after merge (non-critical — wrapped in try-catch)
       try {
         const issues = validateLeague(result.data, true);
         const autoFixed = issues.filter(i => i.autoFixed);
         if (autoFixed.length > 0) {
-          addNotification({ type: "warning", title: "Correcciones automáticas", message: `${autoFixed.length} valores corregidos` });
+          addNotification({
+            type: "warning",
+            title: "Correcciones automáticas",
+            message: `${autoFixed.length} valores corregidos automáticamente`,
+          });
         }
-      } catch (valErr) { console.error("Validation error:", valErr); }
+      } catch (valErr) {
+        console.error("Validation error (non-critical):", valErr);
+      }
 
-      try { createSnapshot(result.data, `Carga inicial: ${fName}`); } catch (snapErr) { console.error("Snapshot error:", snapErr); }
+      // Create initial snapshot (non-critical)
+      try {
+        createSnapshot(result.data, `Carga inicial: ${fileName}`);
+      } catch (snapErr) {
+        console.error("Snapshot error (non-critical):", snapErr);
+      }
 
       setLeague(result.data);
-      setFileName(fName);
-      toast.success(`"${fName}" cargado (${(result.data.players || []).length} jugadores, ${(result.data.teams || []).length} equipos)`);
+      setFileName(fileName);
+      toast.success(`"${fileName}" cargado correctamente (${(result.data.players || []).length} jugadores, ${(result.data.teams || []).length} equipos)`);
     } catch (err) {
-      console.error("processAndLoad error:", err);
-      toast.error(`Error al procesar "${fName}": ${err instanceof Error ? err.message : "Error desconocido"}`);
+      console.error("processAndLoad critical error:", err);
+      toast.error(`Error al procesar "${fileName}": ${err instanceof Error ? err.message : "Error desconocido"}`);
+      addNotification({ type: "error", title: "Error al cargar", message: `${fileName}: ${err instanceof Error ? err.message : "Error desconocido"}` });
     }
   }, [setLeague, setFileName]);
 
   const handleFile = useCallback((file: File, asReference: boolean = false) => {
-    if (!file.name.endsWith(".json")) { toast.error("Solo se aceptan archivos JSON"); return; }
+    if (!file.name.endsWith(".json")) {
+      toast.error("Solo se aceptan archivos JSON");
+      return;
+    }
     const reader = new FileReader();
-    reader.onerror = () => toast.error(`No se pudo leer "${file.name}"`);
+    reader.onerror = () => {
+      toast.error(`No se pudo leer el archivo "${file.name}" — verifica que no esté dañado`);
+    };
     reader.onload = (e) => {
       const raw = e.target?.result;
-      if (typeof raw !== "string" || !raw.trim()) { toast.error(`"${file.name}" está vacío`); return; }
+      if (typeof raw !== "string" || !raw.trim()) {
+        toast.error(`El archivo "${file.name}" está vacío o no se pudo leer`);
+        return;
+      }
       let data: any;
-      try { data = JSON.parse(raw); } catch (parseErr) {
-        toast.error(`Error de sintaxis JSON en "${file.name}": ${parseErr instanceof Error ? parseErr.message : "JSON inválido"}`);
+      try {
+        data = JSON.parse(raw);
+      } catch (parseErr) {
+        const msg = parseErr instanceof Error ? parseErr.message : "JSON inválido";
+        toast.error(`Error de sintaxis JSON en "${file.name}": ${msg}`);
         return;
       }
-      // Check if it's a project file
-      if (data.savedAt && data.league && data.changeHistory) {
-        restoreProjectSession(data);
-        return;
+      if (asReference) {
+        addReferenceFile(file.name, data);
+        toast.success(`"${file.name}" añadido como referencia`);
+      } else {
+        processAndLoad(data, file.name);
       }
-      if (asReference) { addReferenceFile(file.name, data); toast.success(`"${file.name}" añadido como referencia`); }
-      else processAndLoad(data, file.name);
     };
     reader.readAsText(file);
   }, [processAndLoad, addReferenceFile]);
 
-  const restoreProjectSession = useCallback((session: ProjectSession) => {
-    try {
-      restoreFromProjectFile(session);
-      if (session.league) {
-        setLeague(session.league);
-        setFileName(session.fileName || "proyecto-restaurado.json");
-        if (session.activeTab) setActiveTab(session.activeTab);
-        toast.success("Proyecto restaurado completamente");
-        addNotification({ type: "success", title: "Proyecto restaurado", message: `Liga "${session.fileName}" con ${session.changeHistory?.length || 0} cambios históricos` });
-      }
-    } catch (err) {
-      console.error("Restore project error:", err);
-      toast.error("Error al restaurar el proyecto");
-    }
-  }, [setLeague, setFileName, setActiveTab]);
-
-  const restoreFromIDB = useCallback(async () => {
-    try {
-      const session = await loadFromIndexedDB();
-      if (session) restoreProjectSession(session);
-      else toast.error("No se encontró sesión guardada");
-    } catch { toast.error("Error al restaurar desde almacenamiento local"); }
-  }, [restoreProjectSession]);
-
-  const discardIDB = useCallback(async () => {
-    await clearIndexedDB();
-    setHasIDBSession(false);
-    toast.success("Sesión descartada");
-  }, []);
-
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     const files = Array.from(e.dataTransfer.files);
-    if (files.length === 1 && !league) handleFile(files[0]);
-    else if (files.length === 1) handleFile(files[0], multiMode);
-    else files.forEach((f, i) => handleFile(f, i > 0));
+    if (files.length === 1 && !league) {
+      handleFile(files[0]);
+    } else if (files.length === 1) {
+      handleFile(files[0], multiMode);
+    } else {
+      files.forEach((f, i) => handleFile(f, i > 0));
+    }
   }, [handleFile, league, multiMode]);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    if (files.length === 1 && !league) handleFile(files[0]);
-    else files.forEach((f, i) => handleFile(f, i > 0 || (league !== null)));
+    if (files.length === 1 && !league) {
+      handleFile(files[0]);
+    } else {
+      files.forEach((f, i) => handleFile(f, i > 0 || (league !== null)));
+    }
   }, [handleFile, league]);
 
-  const loadDemo = () => processAndLoad(DEMO_LEAGUE as any, "demo-league.json");
+  const loadDemo = () => {
+    processAndLoad(DEMO_LEAGUE as any, "demo-league.json");
+  };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[70vh] animate-fade-in">
@@ -177,20 +176,6 @@ const FileUpload = () => {
         <h1 className="text-6xl md:text-8xl font-display text-gradient-fire tracking-wider mb-2">BBGM EDITOR</h1>
         <p className="text-muted-foreground text-lg">Edita tu archivo de Basketball GM de forma visual</p>
       </div>
-
-      {/* IndexedDB restore banner */}
-      {hasIDBSession && (
-        <div className="w-full max-w-lg mb-4 bg-primary/10 border border-primary/30 rounded-xl p-4 flex items-center justify-between gap-3 animate-fade-in">
-          <div>
-            <p className="text-sm font-medium text-foreground">Sesión anterior encontrada</p>
-            <p className="text-xs text-muted-foreground">Se detectó una sesión guardada en el almacenamiento local</p>
-          </div>
-          <div className="flex gap-2 shrink-0">
-            <Button size="sm" onClick={restoreFromIDB} className="gap-1 text-xs"><FolderOpen className="w-3.5 h-3.5" /> Restaurar</Button>
-            <Button size="sm" variant="ghost" onClick={discardIDB} className="text-xs">Descartar</Button>
-          </div>
-        </div>
-      )}
 
       <label
         onDrop={handleDrop}
@@ -204,7 +189,7 @@ const FileUpload = () => {
           </div>
           <div className="text-center">
             <p className="text-foreground font-medium text-lg">Arrastra tus archivos JSON aquí</p>
-            <p className="text-muted-foreground text-sm mt-1">Liga BBGM o proyecto guardado (.bbgm-project.json)</p>
+            <p className="text-muted-foreground text-sm mt-1">o haz clic para seleccionar (múltiples archivos soportados)</p>
           </div>
           <span className="text-xs text-muted-foreground/60">El primero será editable, el resto como referencia</span>
         </div>
@@ -224,7 +209,9 @@ const FileUpload = () => {
       )}
 
       <div className="mt-6 flex gap-3">
-        <Button onClick={loadDemo} variant="outline" className="gap-2"><FileJson className="w-4 h-4" /> Cargar Demo</Button>
+        <Button onClick={loadDemo} variant="outline" className="gap-2">
+          <FileJson className="w-4 h-4" /> Cargar Demo
+        </Button>
         <a href="https://play.basketball-gm.com" target="_blank" rel="noopener noreferrer">
           <Button variant="ghost" className="gap-2">Abrir Basketball GM</Button>
         </a>

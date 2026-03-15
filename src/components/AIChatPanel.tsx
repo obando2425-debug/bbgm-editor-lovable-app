@@ -245,11 +245,9 @@ const AIChatPanel = ({ open, onClose }: { open: boolean; onClose: () => void }) 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
     let content = input.trim();
-    // Process attached file as internal context — NOT as text in the message
-    let fileContext: any = null;
     if (attachedFile) {
-      fileContext = attachedFile.data;
-      content = `[Archivo adjunto: ${attachedFile.name} — ${Object.keys(attachedFile.data).length} campos, ${(attachedFile.data.players || []).length} jugadores, ${(attachedFile.data.teams || []).length} equipos]\n\n${content}`;
+      const summary = JSON.stringify(attachedFile.data).slice(0, 6000);
+      content = `[Archivo adjunto: ${attachedFile.name}]\n${summary}\n\n${content}`;
       setAttachedFile(null);
     }
     if (urlValue.trim()) {
@@ -292,7 +290,6 @@ const AIChatPanel = ({ open, onClose }: { open: boolean; onClose: () => void }) 
         salaryCap: getAttr("salaryCap"),
         fileName,
         samplePlayers: league.players?.slice(0, 10).map(p => `${p.firstName} ${p.lastName} (tid:${p.tid}, ovr:${p.ratings?.[p.ratings.length-1]?.ovr})`),
-        ...(fileContext ? { attachedFileSchema: { keys: Object.keys(fileContext), playerCount: (fileContext.players || []).length, teamCount: (fileContext.teams || []).length, samplePlayer: fileContext.players?.[0], sampleTeam: fileContext.teams?.[0] } } : {}),
       } : null;
 
       const resp = await fetch(CHAT_URL, {
